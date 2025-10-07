@@ -1,0 +1,16 @@
+version: '3.8' 
+#gua masih gak tahu kalau gak bisa di vrsi 3.8 turun ke 3.6
+
+services:
+  frontend:
+    container_name: fepwb2-dev
+    build: .
+    ports:
+      - "3000:3000"
+      
+    volumes:
+      - .:/app
+      - /app/node_modules
+      
+    environment:
+      - NODE_ENV=development
