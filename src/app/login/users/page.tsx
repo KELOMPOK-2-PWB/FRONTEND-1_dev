@@ -3,29 +3,30 @@ import { useState } from "react";
 import Image from "next/image";
 import { useRouter } from "next/navigation";
 
-export default function LoginPage() {
-  const router = useRouter();
 
-  const [form, setForm] = useState({
-    username: "",
-    password: "",
-  });
+export default function LoginPageUtama() {
+  const router = useRouter();
+  const [form, setForm] = useState({ username: "", password: "" });
+  const [loading, setLoading] = useState(false);
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    setForm({ ...form, [e.target.name]: e.target.value });
+    setForm((p) => ({ ...p, [e.target.name]: e.target.value }));
   };
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    console.log("Login data:", form);
 
-    // contoh login
-    if (form.username && form.password) {
-      alert("Login successful!");
-      // di sini bisa diarahkan ke dashboard
-    } else {
-      alert("Please fill out all fields");
+    if (!form.username || !form.password) {
+      alert("Mohon isi semua field.");
+      return;
     }
+
+    setLoading(true);
+    setTimeout(() => {
+      alert("Login berhasil!");
+      setLoading(false);
+      // redirect ke dashboard bisa ditambahkan di sini
+    }, 1000);
   };
 
   const goToRegister = () => {
@@ -33,71 +34,61 @@ export default function LoginPage() {
   };
 
   return (
-    <div className="flex items-center justify-center min-h-screen bg-black relative overflow-hidden">
-      {/* Background Partikel Merah */}
-      <div className="absolute inset-0 bg-[radial-gradient(circle_at_top_left,_rgba(255,0,0,0.25),_transparent_40%),radial-gradient(circle_at_bottom_right,_rgba(255,0,0,0.2),_transparent_40%)] animate-pulse"></div>
-
-      {/* Card Login */}
-      <div className="relative z-10 bg-black/70 border border-red-600 rounded-2xl shadow-[0_0_30px_rgba(255,0,0,0.4)] p-10 w-[380px] text-center backdrop-blur-sm">
-        <div className="flex flex-col items-center">
-          <Image
-            src="/logo.png"
-            alt="Ashura Logo"
-            width={100}
-            height={100}
-            className="mb-4"
-          />
-          <h1 className="text-3xl font-bold text-red-500 tracking-widest">
-            ASHURA
-          </h1>
-          <h2 className="text-lg font-semibold text-red-500 mb-8 tracking-wide">
-            LOGIN
-          </h2>
+    <div className="flex items-center justify-center min-h-screen bg-[#FFF5E6] px-4">
+      <div className="bg-white rounded-3xl shadow-xl p-8 w-full max-w-md text-center">
+        <div className="flex flex-col items-center mb-6">
+          <h1 className="text-3xl font-bold text-red-600">ASHURA ECOMMERCE</h1>
+          <p className="text-gray-700 mt-1 text-sm">Login untuk mulai berbelanja!</p>
         </div>
 
-        <form onSubmit={handleSubmit} className="flex flex-col gap-6 text-left">
+        <form onSubmit={handleSubmit} className="flex flex-col gap-4 text-left">
           <div>
-            <label className="block text-red-400 text-sm mb-1">Username</label>
+            <label className="text-black font-medium text-sm mb-1 block">Username</label>
             <input
-              type="text"
               name="username"
               value={form.username}
               onChange={handleChange}
-              className="w-full bg-transparent border-b border-red-600 focus:outline-none focus:border-red-400 text-white py-1"
+              placeholder="Masukkan username"
+              className="w-full border border-gray-300 rounded-lg px-4 py-2 focus:outline-none focus:ring-2 focus:ring-red-400 transition"
               required
             />
           </div>
 
           <div>
-            <label className="block text-red-400 text-sm mb-1">Password</label>
+            <label className="text-black font-medium text-sm mb-1 block">Password</label>
             <input
-              type="password"
               name="password"
+              type="password"
               value={form.password}
               onChange={handleChange}
-              className="w-full bg-transparent border-b border-red-600 focus:outline-none focus:border-red-400 text-white py-1"
+              placeholder="Masukkan password"
+              className="w-full border border-gray-300 rounded-lg px-4 py-2 focus:outline-none focus:ring-2 focus:ring-red-400 transition"
               required
             />
           </div>
 
           <button
             type="submit"
-            className="mt-4 bg-red-600 hover:bg-red-700 text-white font-bold py-2 rounded-lg shadow-[0_0_20px_rgba(255,0,0,0.5)] transition-all"
+            disabled={loading}
+            className={`mt-4 w-full py-2 rounded-lg font-semibold transition ${
+              loading
+                ? "bg-red-300 text-white cursor-not-allowed"
+                : "bg-red-600 hover:bg-red-700 text-white shadow-md"
+            }`}
           >
-            LOGIN
+            {loading ? "Masuk..." : "MASUK"}
           </button>
         </form>
 
-        {/* Link ke Register */}
-        <div className="mt-6 text-sm text-red-400">
-          <p>Don’t have an account?</p>
+        <p className="text-sm text-gray-600 mt-5 text-center">
+          Belum punya akun?{" "}
           <button
             onClick={goToRegister}
-            className="mt-2 px-6 py-2 border border-red-500 text-red-500 rounded-md hover:bg-red-600 hover:text-white transition-all duration-300"
+            className="text-red-600 font-semibold hover:underline"
           >
-            REGISTER
+            Daftar
           </button>
-        </div>
+        </p>
       </div>
     </div>
   );

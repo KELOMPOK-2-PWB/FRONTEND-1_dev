@@ -4,11 +4,10 @@ import { useState } from "react";
 import Image from "next/image";
 import { useRouter } from "next/navigation";
 
-const BASE_URL = "http://localhost:3000"; // base API
+const BASE_URL = process.env.local
 
 export default function RegisterPage() {
   const router = useRouter();
-
   const [form, setForm] = useState({
     username: "",
     email: "",
@@ -25,13 +24,12 @@ export default function RegisterPage() {
   const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
 
-    // simple validation
     if (!form.username || !form.email || !form.password || !form.confirmPassword) {
       alert("Mohon isi semua field yang wajib.");
       return;
     }
     if (form.password !== form.confirmPassword) {
-      alert("Password dan Confirm Password tidak cocok.");
+      alert("Password dan konfirmasi tidak cocok.");
       return;
     }
 
@@ -39,140 +37,95 @@ export default function RegisterPage() {
     try {
       const res = await fetch(`${BASE_URL}/api/auth/register`, {
         method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({
-          username: form.username,
-          email: form.email,
-          password: form.password,
-          phoneNumber: form.phoneNumber,
-        }),
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(form),
       });
-
       const data = await res.json();
 
       if (!res.ok) {
-        const msg = data?.message || "Registrasi gagal. Coba lagi.";
-        alert(msg);
+        alert(data?.message || "Registrasi gagal. Coba lagi.");
         setLoading(false);
         return;
       }
 
-      alert(data?.message || "Registrasi berhasil. Silakan verifikasi OTP.");
+      alert(data?.message || "Registrasi berhasil!");
       router.push(`/verify-otp?email=${encodeURIComponent(form.email)}`);
     } catch (err) {
-      console.error("register error:", err);
-      alert("Terjadi kesalahan jaringan. Coba lagi.");
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  // ===== Tambahan function resend OTP =====
-  const handleResendOtp = async () => {
-    if (!form.email) {
-      alert("Masukkan email untuk resend OTP.");
-      return;
-    }
-
-    setLoading(true);
-    try {
-      const res = await fetch(`${BASE_URL}/api/auth/resend-otp`, {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          "x-api-key": "re_eiG5Nvt3_8NTE4kHg215YyTmjPgzEnUkH", // langsung pakai key
-        },
-        body: JSON.stringify({ email: form.email }),
-      });
-
-      const data = await res.json();
-
-      if (!res.ok) {
-        alert(data?.message || "Gagal resend OTP. Coba lagi.");
-        return;
-      }
-
-      alert(data?.message || "OTP berhasil dikirim ulang.");
-    } catch (err) {
-      console.error("resend OTP error:", err);
-      alert("Terjadi kesalahan jaringan. Coba lagi.");
+      console.error(err);
+      alert("Terjadi kesalahan jaringan.");
     } finally {
       setLoading(false);
     }
   };
 
   return (
-    <div className="flex items-center justify-center min-h-screen bg-black relative overflow-hidden">
-      <div className="absolute inset-0 bg-[radial-gradient(circle_at_top_left,rgba(255,0,0,0.14),transparent_30%),radial-gradient(circle_at_bottom_right,rgba(255,0,0,0.10),transparent_30%)] -z-10" />
-
-      <div className="relative z-10 bg-black/70 border border-red-600 rounded-2xl shadow-[0_0_30px_rgba(255,0,0,0.35)] p-10 w-[380px] text-center">
-        <div className="flex flex-col items-center mb-4">
-          <Image src="/logo.png" alt="Ashura Logo" width={90} height={90} className="mb-3" />
-          <h1 className="text-3xl font-bold text-red-500 tracking-widest">ASHURA</h1>
-          <h2 className="text-sm text-red-400 mt-1">Create your account</h2>
+    <div className="flex items-center justify-center min-h-screen bg-[#FFF5E6] px-4">
+      <div className="bg-white rounded-3xl shadow-xl p-8 w-full max-w-md text-center">
+        <div className="flex flex-col items-center mb-6">
+          <Image src="/logo.png" alt="Ashura Logo" width={80} height={80} className="mb-2" />
+          <h1 className="text-3xl font-bold text-red-600">ASHURA</h1>
+          <p className="text-gray-700 mt-1 text-sm">Buat akunmu dan mulai berbelanja!</p>
         </div>
 
         <form onSubmit={handleSubmit} className="flex flex-col gap-4 text-left">
           <div>
-            <label className="block text-red-400 text-xs mb-1">Username</label>
+            <label className="text-black font-medium text-sm mb-1 block">Username</label>
             <input
               name="username"
               value={form.username}
               onChange={handleChange}
-              className="w-full bg-transparent border-b border-red-600 focus:outline-none focus:border-red-400 text-white py-2"
-              placeholder="masukkan username"
+              placeholder="Masukkan username"
+              className="w-full border border-gray-300 rounded-lg px-4 py-2 focus:outline-none focus:ring-2 focus:ring-red-400 transition"
               required
             />
           </div>
 
           <div>
-            <label className="block text-red-400 text-xs mb-1">Email</label>
+            <label className="text-black font-medium text-sm mb-1 block">Email</label>
             <input
               name="email"
               type="email"
               value={form.email}
               onChange={handleChange}
-              className="w-full bg-transparent border-b border-red-600 focus:outline-none focus:border-red-400 text-white py-2"
               placeholder="you@example.com"
+              className="w-full border border-gray-300 rounded-lg px-4 py-2 focus:outline-none focus:ring-2 focus:ring-red-400 transition"
               required
             />
           </div>
 
           <div>
-            <label className="block text-red-400 text-xs mb-1">Phone Number</label>
+            <label className="text-black font-medium text-sm mb-1 block">No. HP </label>
             <input
               name="phoneNumber"
               value={form.phoneNumber}
               onChange={handleChange}
-              className="w-full bg-transparent border-b border-red-600 focus:outline-none focus:border-red-400 text-white py-2"
               placeholder="0812xxxx..."
+              className="w-full border border-gray-300 rounded-lg px-4 py-2 focus:outline-none focus:ring-2 focus:ring-red-400 transition"
             />
           </div>
 
           <div>
-            <label className="block text-red-400 text-xs mb-1">Password</label>
+            <label className="text-black font-medium text-sm mb-1 block">Password</label>
             <input
               name="password"
               type="password"
               value={form.password}
               onChange={handleChange}
-              className="w-full bg-transparent border-b border-red-600 focus:outline-none focus:border-red-400 text-white py-2"
               placeholder="Password"
+              className="w-full border border-gray-300 rounded-lg px-4 py-2 focus:outline-none focus:ring-2 focus:ring-red-400 transition"
               required
             />
           </div>
 
           <div>
-            <label className="block text-red-400 text-xs mb-1">Confirm Password</label>
+            <label className="text-black font-medium text-sm mb-1 block">Konfirmasi Password</label>
             <input
               name="confirmPassword"
               type="password"
               value={form.confirmPassword}
               onChange={handleChange}
-              className="w-full bg-transparent border-b border-red-600 focus:outline-none focus:border-red-400 text-white py-2"
-              placeholder="Confirm password"
+              placeholder="Konfirmasi Password"
+              className="w-full border border-gray-300 rounded-lg px-4 py-2 focus:outline-none focus:ring-2 focus:ring-red-400 transition"
               required
             />
           </div>
@@ -182,36 +135,21 @@ export default function RegisterPage() {
             disabled={loading}
             className={`mt-4 w-full py-2 rounded-lg font-semibold transition ${
               loading
-                ? "bg-red-700/60 text-white cursor-not-allowed"
-                : "bg-red-600 hover:bg-red-700 text-white shadow-[0_0_18px_rgba(255,0,0,0.45)]"
+                ? "bg-red-300 text-white cursor-not-allowed"
+                : "bg-red-600 hover:bg-red-700 text-white shadow-md"
             }`}
           >
-            {loading ? "Registering..." : "REGISTER"}
-          </button>
-
-          {/* Tombol Resend OTP */}
-          <button
-            type="button"
-            onClick={handleResendOtp}
-            disabled={loading || !form.email}
-            className={`mt-2 w-full py-2 rounded-lg font-semibold transition ${
-              loading || !form.email
-                ? "bg-red-700/60 text-white cursor-not-allowed"
-                : "bg-red-500 hover:bg-red-600 text-white shadow-[0_0_12px_rgba(255,0,0,0.35)]"
-            }`}
-          >
-            {loading ? "Resending..." : "RESEND OTP"}
+            {loading ? "Mendaftarkan..." : "DAFTAR"}
           </button>
         </form>
 
-        <p className="text-sm text-red-400 mt-5">
-          Already have an account?{" "}
+        <p className="text-sm text-gray-600 mt-5 text-center">
+          Sudah punya akun?{" "}
           <button
             onClick={() => router.push("/login")}
-            className="text-red-500 font-semibold hover:underline"
-            type="button"
+            className="text-red-600 font-semibold hover:underline"
           >
-            Login
+            Masuk
           </button>
         </p>
       </div>
