@@ -6,8 +6,8 @@ import Footer from "@/component/Element/Footer";
 const inter = Inter({ subsets: ["latin"] });
 
 export const metadata = {
-  title: "Aqua API Dashboard",
-  description: "REST API Service for your needs",
+  title: "Ashura",
+  description: "Eccomerce",
 };
 
 export default function RootLayout({
