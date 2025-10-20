@@ -140,7 +140,7 @@ export default function LoginUserPage() {
               Ingat saya
             </label>
             <a
-              href="/forgot-password"
+              href="/login/users/forgotpasword"
               className="text-[#e53935] hover:underline"
             >
               Lupa password?
