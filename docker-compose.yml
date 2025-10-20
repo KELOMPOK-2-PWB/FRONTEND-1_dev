@@ -1,4 +1,5 @@
-version: '3.8' 
+# version: '3.8' 
+version: '3.6' 
 #gua masih gak tahu kalau gak bisa di vrsi 3.8 turun ke 3.6
 
 services:
