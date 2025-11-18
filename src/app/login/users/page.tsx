@@ -38,14 +38,21 @@ export default function LoginUserPage() {
       const data = await res.json();
 
       if (res.ok) {
-        localStorage.setItem("authToken", data.token);
-        localStorage.setItem("userData", JSON.stringify(data.user));
-        setMessage("Login berhasil!");
+        // ⬇️ SIMPAN BEARER TOKEN + DATA USER
+        if (data.token) {
+          // simpan token mentah, nanti dipakai: Authorization: Bearer ${token}
+          localStorage.setItem("authToken", data.token);
+        }
+        if (data.user) {
+          localStorage.setItem("userData", JSON.stringify(data.user));
+        }
+
+        setMessage(data.message || "Login berhasil!");
 
         const role = data.user?.role?.toLowerCase();
         if (role === "admin") router.push("/dashboard/admin");
-        else if (role === "user") router.push("/dashboard/user");
-        else router.push("/");
+        else if (role === "user") router.push("/");
+        else router.push("/dashboard/seller");
       } else {
         setMessage(data.message || "Email/username atau password salah.");
       }
