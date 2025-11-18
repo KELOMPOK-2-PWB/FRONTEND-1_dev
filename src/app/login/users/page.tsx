@@ -23,15 +23,15 @@ export default function LoginUserPage() {
           />
 
           {/* LOGIN FORM */}
-          <form className="relative z-10 bg-white rounded-[10px] p-8 sm:p-10 shadow-[0_2px_16px_rgba(0,0,0,0.12)] w-full flex flex-col gap-4">
-            <h2 className="text-center text-[1.7rem] font-bold text-[#1E1E1E] font-inter">
+          <form className="relative z-10 bg-[#7A1F1F] backdrop-blur-sm rounded-[10px] p-8 sm:p-10 shadow-[0_2px_16px_rgba(0,0,0,0.12)] w-full flex flex-col gap-4">
+            <h2 className="text-center text-[1.7rem] font-bold text-[#FFFFFF] font-inter">
               Masuk ke Akun Anda
             </h2>
-            <p className="text-center text-base font-medium text-[#1E1E1E] mb-3 font-inter">
+            <p className="text-center text-base font-medium text-[#FFFFFF] mb-3 font-inter">
               Belum punya akun Ashura?{" "}
               <a
                 href="/register/users"
-                className="text-[#e53935] font-medium hover:underline"
+                className="text-[#E53935] font-medium hover:underline"
               >
                 Daftar
               </a>
@@ -41,23 +41,23 @@ export default function LoginUserPage() {
               type="email"
               placeholder="Email"
               required
-              className="text-[#3C4043] px-3 py-2 border border-[#DADCE0] rounded-md text-base outline-none font-inter focus:border-[#e53935] transition-colors duration-200"
+              className="bg-white text-[#1E1E1E] px-3 py-2 border border-white/40 rounded-md text-base outline-none font-inter focus:border-[#e53935] transition-colors duration-200"
             />
             <input
               type="password"
               placeholder="Password"
               required
-              className="text-[#3C4043] px-3 py-2 border border-[#DADCE0] rounded-md text-base outline-none font-inter focus:border-[#e53935] transition-colors duration-200"
+              className="bg-white text-[#1E1E1E] px-3 py-2 border border-white/40 rounded-md text-base outline-none font-inter focus:border-[#e53935] transition-colors duration-200"
             />
 
-            <div className="flex items-center justify-between text-sm text-[#3C4043] font-inter flex-wrap gap-2">
+            <div className="flex items-center justify-between text-sm text-[#FFFFFF] font-inter flex-wrap gap-2">
               <label className="flex items-center gap-2">
                 <input type="checkbox" className="accent-[#e53935]" />
                 Ingat saya
               </label>
               <a
                 href="/forgot-password"
-                className="text-[#e53935] hover:underline"
+                className="text-[#E53935] hover:underline"
               >
                 Lupa password?
               </a>
