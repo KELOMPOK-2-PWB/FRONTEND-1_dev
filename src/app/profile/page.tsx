@@ -1,5 +1,5 @@
 export default function PageUtama() {
     return (
-        <div>sabar</div>
+        <div>ini di profile</div>
     );
 }
