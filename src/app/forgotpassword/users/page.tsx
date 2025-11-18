@@ -15,7 +15,7 @@ export default function ForgotPasswordPage() {
   const [error, setError] = useState("");
 
   const handleSubmit = async (e: React.FormEvent<HTMLFormElement>): Promise<void> => {   
-   e.preventDefault();
+  e.preventDefault();
     setLoading(true);
     setMessage("");
     setError("");
@@ -77,7 +77,7 @@ export default function ForgotPasswordPage() {
         <form
           onSubmit={handleSubmit}
           className={`w-full max-w-md rounded-[10px] p-8 sm:p-10 shadow-[0_4px_20px_rgba(0,0,0,0.15)] flex flex-col gap-4 transition-all duration-300 ${
-            darkMode ? "bg-[#1E1E1E] text-white" : "bg-white text-[#1E1E1E]"
+            darkMode ? "bg-[#7A1F1F] text-white" : "bg-white text-[#1E1E1E]"
           }`}
         >
           <h2 className="text-center text-[1.8rem] font-bold font-inter">
@@ -95,7 +95,7 @@ export default function ForgotPasswordPage() {
             required
             className={`px-3 py-2 border rounded-md text-base outline-none font-inter focus:border-[#e53935] transition-colors duration-200 ${
               darkMode
-                ? "border-[#555] bg-[#2C2C2C] text-white"
+                ? "border-[#DADCE0] bg-[#FFFFFF] text-[#3C4043]"
                 : "border-[#DADCE0] text-[#3C4043]"
             }`}
           />
@@ -106,7 +106,7 @@ export default function ForgotPasswordPage() {
             </p>
           )}
           {error && (
-            <p className="text-red-500 text-sm text-center font-inter">
+            <p className="text-[red] text-sm text-center font-inter">
               {error}
             </p>
           )}
@@ -124,9 +124,9 @@ export default function ForgotPasswordPage() {
           <div className="text-center text-sm mt-3 font-inter">
             <a
               href="/login/users"
-              className="text-[#e53935] hover:underline font-medium"
+              className="text-[#e53935] hover:underline font-semibold"
             >
-              ← Kembali ke halaman login
+              ←  Kembali ke halaman login
             </a>
           </div>
         </form>

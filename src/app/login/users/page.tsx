@@ -1,3 +1,4 @@
+
 "use client";
 
 import React, { useState } from "react";
@@ -90,16 +91,16 @@ export default function LoginUserPage() {
         <form
           onSubmit={handleSubmit}
           className={`w-full max-w-md rounded-[10px] p-8 sm:p-10 shadow-[0_4px_20px_rgba(0,0,0,0.15)] flex flex-col gap-4 transition-all duration-300 ${
-            darkMode ? "bg-[#1E1E1E] text-white" : "bg-white text-[#1E1E1E]"
+            darkMode ? "bg-[#7A1F1F] text-white" : "bg-white text-[#1E1E1E]"
           }`}
         >
           <h2 className="text-center text-[1.8rem] font-bold font-inter">
-            Masuk Sekarang
+            Login Sekarang
           </h2>
           <p className="text-center text-base font-medium mb-3 font-inter">
             Belum punya akun Ashura?{" "}
             <a
-              href="/register/users"
+              href="/register/pilihrole"
               className="text-[#e53935] font-semibold hover:underline"
             >
               Daftar
@@ -113,59 +114,13 @@ export default function LoginUserPage() {
             value={form.emailOrUsername}
             onChange={handleChange}
             required
-            className={`px-3 py-2 border rounded-md text-base outline-none font-inter focus:border-[#e53935] transition-colors duration-200 ${
+            className={`px-3 py-2 border rounded-md text-base outline-none font-inter focus:border-[#DADCE0] transition-colors duration-200 ${
               darkMode
-                ? "border-[#555] bg-[#2C2C2C] text-white"
+                ? "border-[#DADCE0] bg-[#FFFFFF] text-[#3C4043]"
                 : "border-[#DADCE0] text-[#3C4043]"
             }`}
           />
 
-<<<<<<< HEAD
-          {/* LOGIN FORM */}
-          <form className="relative z-10 bg-[#7A1F1F] backdrop-blur-sm rounded-[10px] p-8 sm:p-10 shadow-[0_2px_16px_rgba(0,0,0,0.12)] w-full flex flex-col gap-4">
-            <h2 className="text-center text-[1.7rem] font-bold text-[#FFFFFF] font-inter">
-              Masuk ke Akun Anda
-            </h2>
-            <p className="text-center text-base font-medium text-[#FFFFFF] mb-3 font-inter">
-              Belum punya akun Ashura?{" "}
-              <a
-                href="/register/users"
-                className="text-[#E53935] font-medium hover:underline"
-              >
-                Daftar
-              </a>
-            </p>
-
-            <input
-              type="email"
-              placeholder="Email"
-              required
-              className="bg-white text-[#1E1E1E] px-3 py-2 border border-white/40 rounded-md text-base outline-none font-inter focus:border-[#e53935] transition-colors duration-200"
-            />
-            <input
-              type="password"
-              placeholder="Password"
-              required
-              className="bg-white text-[#1E1E1E] px-3 py-2 border border-white/40 rounded-md text-base outline-none font-inter focus:border-[#e53935] transition-colors duration-200"
-            />
-
-            <div className="flex items-center justify-between text-sm text-[#FFFFFF] font-inter flex-wrap gap-2">
-              <label className="flex items-center gap-2">
-                <input type="checkbox" className="accent-[#e53935]" />
-                Ingat saya
-              </label>
-              <a
-                href="/forgot-password"
-                className="text-[#E53935] hover:underline"
-              >
-                Lupa password?
-              </a>
-            </div>
-
-            <button
-              type="submit"
-              className="bg-[#e53935] text-white rounded-md py-2 text-[1.1rem] font-bold cursor-pointer mt-2 transition-colors duration-200 hover:bg-[#b71c1c]"
-=======
           <input
             type="password"
             name="password"
@@ -173,9 +128,9 @@ export default function LoginUserPage() {
             value={form.password}
             onChange={handleChange}
             required
-            className={`px-3 py-2 border rounded-md text-base outline-none font-inter focus:border-[#e53935] transition-colors duration-200 ${
+            className={`px-3 py-2 border rounded-md text-base outline-none font-inter focus:border-[#DADCE0] transition-colors duration-200 ${
               darkMode
-                ? "border-[#555] bg-[#2C2C2C] text-white"
+                ? "border-[#DADCE0] bg-[#FFFFFF] text-[#3C4043]"
                 : "border-[#DADCE0] text-[#3C4043]"
             }`}
           />
@@ -186,9 +141,8 @@ export default function LoginUserPage() {
               Ingat saya
             </label>
             <a
-              href="/login/users/forgotpasword"
+              href="/forgotpassword/users"
               className="text-[#e53935] hover:underline"
->>>>>>> 2cb91b503875c92e88d7aaf6eca58b8872c6f47b
             >
               Lupa password?
             </a>
