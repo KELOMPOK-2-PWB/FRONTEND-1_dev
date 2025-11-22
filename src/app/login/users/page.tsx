@@ -68,7 +68,6 @@ export default function LoginPage() {
         } else {
           router.push("/");
         }
-
       } else {
         // Handle Error Login
         const errorMsg = data.message || "Gagal login.";
