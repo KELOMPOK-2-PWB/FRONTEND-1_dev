@@ -6,20 +6,27 @@ import { useRouter } from "next/navigation";
 const BASE_URL = process.env.NEXT_PUBLIC_BACKEND_URL;
 const BACKEND_TOKEN = process.env.NEXT_PUBLIC_BACKEND_TOKEN;
 
-export default function LoginUserPage() {
+export default function LoginPage() {
   const router = useRouter();
   const [darkMode, setDarkMode] = useState(true);
   const [form, setForm] = useState({ emailOrUsername: "", password: "" });
   const [loading, setLoading] = useState(false);
   const [message, setMessage] = useState("");
+  
+  // State khusus buat tombol verifikasi ulang
+  const [isUnverified, setIsUnverified] = useState(false);
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     setForm({ ...form, [e.target.name]: e.target.value });
+    // Reset status error kalau user ngetik ulang
+    if (isUnverified) setIsUnverified(false);
+    if (message) setMessage("");
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setMessage("");
+    setIsUnverified(false);
     setLoading(true);
 
     try {
@@ -36,32 +43,52 @@ export default function LoginUserPage() {
       });
 
       const data = await res.json();
+      console.log("LOGIN RESPONSE:", data);
 
       if (res.ok) {
-        // ⬇️ SIMPAN BEARER TOKEN + DATA USER
-        if (data.token) {
-          // simpan token mentah, nanti dipakai: Authorization: Bearer ${token}
-          localStorage.setItem("authToken", data.token);
-        }
-        if (data.user) {
-          localStorage.setItem("userData", JSON.stringify(data.user));
-        }
-
-        setMessage(data.message || "Login berhasil!");
-
         const role = data.user?.role?.toLowerCase();
-        if (role === "admin") router.push("/dashboard/admin");
-        else if (role === "user") router.push("/");
-        else router.push("/dashboard/seller");
+
+        // 🔹 CEGAT ADMIN
+        if (role === "admin") {
+          setMessage("Akun Admin terdeteksi. Silakan login di halaman khusus Admin.");
+          setLoading(false);
+          setTimeout(() => router.push("/login/admin"), 2000);
+          return;
+        }
+
+        // 🔹 USER & SELLER MASUK SINI
+        localStorage.setItem("authToken", data.token);
+        localStorage.setItem("userData", JSON.stringify(data.user));
+        setMessage("Login berhasil! Mengalihkan...");
+
+        if (role === "seller") {
+          router.push("/dashboard/seller");
+        } else if (role === "user" || role === "users") {
+          router.push("/dashboard/user");
+        } else {
+          router.push("/");
+        }
       } else {
-        setMessage(data.message || "Email/username atau password salah.");
+        // Handle Error Login
+        const errorMsg = data.message || "Gagal login.";
+        setMessage(errorMsg);
+        setLoading(false); // Matikan loading karena gagal
+
+        // Cek kalau errornya gara-gara belum verifikasi
+        if (errorMsg.toLowerCase().includes("belum diverifikasi") || errorMsg.toLowerCase().includes("not verified")) {
+          setIsUnverified(true);
+        }
       }
     } catch (err) {
       console.error(err);
       setMessage("Terjadi kesalahan pada server.");
-    } finally {
-      setLoading(false);
+      setLoading(false); // Matikan loading jika error koneksi
     }
+  };
+
+  const handleVerifikasiUlang = () => {
+    sessionStorage.setItem("userEmail", form.emailOrUsername);
+    router.push("/register/otp");
   };
 
   return (
@@ -70,7 +97,7 @@ export default function LoginUserPage() {
         darkMode ? "bg-[#0D0D0D]" : "bg-white"
       }`}
     >
-      {/* LEFT SECTION */}
+      {/* LEFT SECTION (LOGO) */}
       <div className="hidden md:flex flex-1 items-center justify-center">
         <img
           src="/A-logo.png"
@@ -79,7 +106,7 @@ export default function LoginUserPage() {
         />
       </div>
 
-      {/* RIGHT SECTION */}
+      {/* RIGHT SECTION (FORM) */}
       <div className="flex flex-1 items-center justify-center relative w-full">
         {/* Toggle Mode */}
         <button
@@ -93,23 +120,23 @@ export default function LoginUserPage() {
           {darkMode ? "☀️" : "🌙"}
         </button>
 
-        {/* Form */}
+        {/* Form Login */}
         <form
           onSubmit={handleSubmit}
           className={`w-full max-w-md rounded-[10px] p-8 sm:p-10 shadow-[0_4px_20px_rgba(0,0,0,0.15)] flex flex-col gap-4 transition-all duration-300 ${
-            darkMode ? "bg-[#1E1E1E] text-white" : "bg-white text-[#1E1E1E]"
+            darkMode ? "bg-[#7A1F1F] text-white" : "bg-white text-[#1E1E1E]"
           }`}
         >
           <h2 className="text-center text-[1.8rem] font-bold font-inter">
-            Masuk Sekarang
+            Login Ashura
           </h2>
           <p className="text-center text-base font-medium mb-3 font-inter">
-            Belum punya akun Ashura?{" "}
+            Belum punya akun?{" "}
             <a
-              href="/register/users"
+              href="/register/pilihrole"
               className="text-[#e53935] font-semibold hover:underline"
             >
-              Daftar
+              Daftar Sekarang
             </a>
           </p>
 
@@ -120,9 +147,9 @@ export default function LoginUserPage() {
             value={form.emailOrUsername}
             onChange={handleChange}
             required
-            className={`px-3 py-2 border rounded-md text-base outline-none font-inter focus:border-[#e53935] transition-colors duration-200 ${
+            className={`px-3 py-2 border rounded-md text-base outline-none font-inter focus:border-[#DADCE0] transition-colors duration-200 ${
               darkMode
-                ? "border-[#555] bg-[#2C2C2C] text-white"
+                ? "border-[#DADCE0] bg-[#FFFFFF] text-[#3C4043]"
                 : "border-[#DADCE0] text-[#3C4043]"
             }`}
           />
@@ -134,9 +161,9 @@ export default function LoginUserPage() {
             value={form.password}
             onChange={handleChange}
             required
-            className={`px-3 py-2 border rounded-md text-base outline-none font-inter focus:border-[#e53935] transition-colors duration-200 ${
+            className={`px-3 py-2 border rounded-md text-base outline-none font-inter focus:border-[#DADCE0] transition-colors duration-200 ${
               darkMode
-                ? "border-[#555] bg-[#2C2C2C] text-white"
+                ? "border-[#DADCE0] bg-[#FFFFFF] text-[#3C4043]"
                 : "border-[#DADCE0] text-[#3C4043]"
             }`}
           />
@@ -147,7 +174,7 @@ export default function LoginUserPage() {
               Ingat saya
             </label>
             <a
-              href="/login/users/forgotpasword"
+              href="/forgotpassword"
               className="text-[#e53935] hover:underline"
             >
               Lupa password?
@@ -162,7 +189,8 @@ export default function LoginUserPage() {
             {loading ? "Memproses..." : "Masuk"}
           </button>
 
-          {message && (
+          {/* Pesan Error Biasa */}
+          {message && !isUnverified && (
             <p
               className={`text-center text-sm mt-2 ${
                 darkMode ? "text-gray-300" : "text-[#1E1E1E]"
@@ -171,6 +199,23 @@ export default function LoginUserPage() {
               {message}
             </p>
           )}
+
+          {/* 🔹 TOMBOL KHUSUS JIKA AKUN BELUM DIVERIFIKASI */}
+          {isUnverified && (
+            <div className="mt-2 flex flex-col items-center gap-2 bg-black/20 p-3 rounded-md border border-yellow-500/50">
+              <p className="text-center text-sm text-yellow-400 font-medium">
+                {message}
+              </p>
+              <button
+                type="button"
+                onClick={handleVerifikasiUlang}
+                className="text-sm bg-yellow-500 text-black font-bold px-4 py-1.5 rounded hover:bg-yellow-400 transition-colors"
+              >
+                Verifikasi Akun Sekarang →
+              </button>
+            </div>
+          )}
+
         </form>
       </div>
     </div>

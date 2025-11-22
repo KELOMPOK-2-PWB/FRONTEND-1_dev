@@ -6,7 +6,7 @@ import { useRouter } from "next/navigation";
 const BASE_URL = process.env.NEXT_PUBLIC_BACKEND_URL;
 const BACKEND_TOKEN = process.env.NEXT_PUBLIC_BACKEND_TOKEN;
 
-export default function RegisterUserPage() {
+export default function RegisterSellerPage() {
   const router = useRouter();
   const [darkMode, setDarkMode] = useState(true);
   const [form, setForm] = useState({
@@ -73,7 +73,7 @@ export default function RegisterUserPage() {
 
     setLoading(true);
     try {
-      const res = await fetch(`${BASE_URL}/api/auth/register`, {
+      const res = await fetch(`${BASE_URL}/api/auth/register-seller`, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
@@ -90,9 +90,9 @@ export default function RegisterUserPage() {
       const data = await res.json();
 
       if (res.ok) {
-        // 🔹 UPDATE DISINI: Simpan Email DAN Role Users
+        // 🔹 UPDATE DISINI: Simpan Email DAN Role Seller
         sessionStorage.setItem("userEmail", form.email);
-        sessionStorage.setItem("userRole", "users"); // Set role users
+        sessionStorage.setItem("userRole", "seller"); // Set role seller
 
         alert(data.message || "Registrasi berhasil!");
         router.push("/register/otp");
@@ -142,7 +142,7 @@ export default function RegisterUserPage() {
           }`}
         >
           <h2 className="text-center text-[1.8rem] font-bold font-inter">
-            Daftar Sebagai User
+            Daftar Sebagai Seller
           </h2>
           <p className="text-center text-base font-medium mb-3 font-inter">
             Sudah punya akun Ashura?{" "}
@@ -153,7 +153,7 @@ export default function RegisterUserPage() {
               Masuk
             </a>
           </p>
-          {/* Inputs ... */}
+          {/* Inputs */}
           <input
             type="email"
             name="email"
