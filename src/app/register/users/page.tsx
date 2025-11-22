@@ -3,8 +3,8 @@
 import React, { useState } from "react";
 import { useRouter } from "next/navigation";
 
-const BASE_URL = process.env.NEXT_PUBLIC_BACKEND_URL || "https://be.ashura.web.id";
-const BACKEND_TOKEN = process.env.NEXT_PUBLIC_BACKEND_TOKEN || "q3948tp9qdyuprtqype4uitqp9v34ytqp934ciutpq9ieyp5iqvhrtniwuhrogiwyi45";
+const BASE_URL = process.env.NEXT_PUBLIC_BACKEND_URL;
+const BACKEND_TOKEN = process.env.NEXT_PUBLIC_BACKEND_TOKEN;
 
 export default function RegisterUserPage() {
   const router = useRouter();

@@ -3,8 +3,8 @@
 import React, { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 
-const BASE_URL = process.env.NEXT_PUBLIC_BACKEND_URL || "https://be.ashura.web.id";
-const BACKEND_TOKEN = process.env.NEXT_PUBLIC_BACKEND_TOKEN || "q3948tp9qdyuprtqype4uitqp9v34ytqp934ciutpq9ieyp5iqvhrtniwuhrogiwyi45";
+const BASE_URL = process.env.NEXT_PUBLIC_BACKEND_URL;
+const BACKEND_TOKEN = process.env.NEXT_PUBLIC_BACKEND_TOKEN;
 
 export default function ForgotPasswordOtpPage() {
   const router = useRouter();
@@ -15,7 +15,7 @@ export default function ForgotPasswordOtpPage() {
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
 
-  // Ambil email dari sessionStorage (disimpan dari halaman sebelumnya)
+  // Ambil email dari sessionStorage 
   useEffect(() => {
     const storedEmail = sessionStorage.getItem("resetEmail");
     if (storedEmail) setEmail(storedEmail);
@@ -32,7 +32,6 @@ export default function ForgotPasswordOtpPage() {
     setLoading(true);
 
     try {
-      // 🔹 PERBAIKAN: Menggunakan endpoint yang benar sesuai screenshot API
       const res = await fetch(`${BASE_URL}/api/auth/verify-reset-otp-password`, { 
         method: "POST",
         headers: {

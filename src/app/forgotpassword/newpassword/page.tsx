@@ -3,8 +3,8 @@
 import React, { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 
-const BASE_URL = process.env.NEXT_PUBLIC_BACKEND_URL || "https://be.ashura.web.id";
-const BACKEND_TOKEN = process.env.NEXT_PUBLIC_BACKEND_TOKEN || "q3948tp9qdyuprtqype4uitqp9v34ytqp934ciutpq9ieyp5iqvhrtniwuhrogiwyi45";
+const BASE_URL = process.env.NEXT_PUBLIC_BACKEND_URL;
+const BACKEND_TOKEN = process.env.NEXT_PUBLIC_BACKEND_TOKEN;
 
 export default function NewPasswordPage() {
   const router = useRouter();
@@ -15,7 +15,7 @@ export default function NewPasswordPage() {
   const [message, setMessage] = useState("");
   const [error, setError] = useState("");
 
-  // memindahkan pengecekan token ke useEffect agar tidak error di server-side rendering
+  // memindahkan pengecekan token ke useeffect agar tidak error di server-side rendering
   useEffect(() => {
     
     const userEmail = sessionStorage.getItem("resetEmail"); 
@@ -40,7 +40,7 @@ export default function NewPasswordPage() {
       return;
     }
 
-    // Ambil data dari sessionStorage
+    // ambil data dari sessionStorage
     const email = sessionStorage.getItem("resetEmail"); // Konsisten pakai resetEmail
     const token = sessionStorage.getItem("resetOtp");   // Konsisten pakai resetOtp
 
@@ -60,7 +60,7 @@ export default function NewPasswordPage() {
         body: JSON.stringify({ 
           email: email,
           newPassword: newPassword,
-          token: token // Kirim OTP sebagai token
+          token: token // otp token
         }),
       });
 
