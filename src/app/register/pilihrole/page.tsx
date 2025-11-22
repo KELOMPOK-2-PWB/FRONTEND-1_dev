@@ -56,15 +56,15 @@ export default function RegisterSelectRole() {
           {/* USER BUTTON */}
           <button
             onClick={() => setSelectedRole("user")}
-            className={`w-full py-2 rounded-md font-semibold font-inter text-white transition-all duration-200
+            className={`w-full py-3 rounded-md font-semibold font-inter text-white transition-all duration-200 border-2
               ${
-                 darkMode
-                ? selectedRole === "user"
-                  ? "bg-[#E53935]"
-                  : "bg-[#5A1414] text-white opacity-50"
-                : selectedRole === "user"
-                  ? "bg-[#0D0D0D]" 
-                  : "bg-[#333] text-white opacity-50"
+                darkMode
+                  ? selectedRole === "user"
+                    ? "bg-[#E53935] border-[#E53935]"
+                    : "bg-[#5A1414] border-transparent text-white/70 hover:bg-[#6d1818]"
+                  : selectedRole === "user"
+                    ? "bg-[#0D0D0D] border-[#0D0D0D]"
+                    : "bg-[#333] border-transparent text-white/70 hover:bg-[#1a1a1a]"
               }
             `}
           >
@@ -74,15 +74,15 @@ export default function RegisterSelectRole() {
           {/* SELLER BUTTON */}
           <button
             onClick={() => setSelectedRole("seller")}
-            className={`w-full py-2 rounded-md font-semibold font-inter text-white transition-all duration-200
+            className={`w-full py-3 rounded-md font-semibold font-inter text-white transition-all duration-200 border-2
               ${
                 darkMode
-                ? selectedRole === "seller"
-                  ? "bg-[#E53935]"
-                  : "bg-[#5A1414] text-white opacity-50"
-                : selectedRole === "seller"
-                  ? "bg-[#0D0D0D]" 
-                  : "bg-[#333] text-white opacity-50"
+                  ? selectedRole === "seller"
+                    ? "bg-[#E53935] border-[#E53935]"
+                    : "bg-[#5A1414] border-transparent text-white/70 hover:bg-[#6d1818]"
+                  : selectedRole === "seller"
+                    ? "bg-[#0D0D0D] border-[#0D0D0D]"
+                    : "bg-[#333] border-transparent text-white/70 hover:bg-[#1a1a1a]"
               }
             `}
           >
@@ -93,20 +93,29 @@ export default function RegisterSelectRole() {
           <button
             onClick={handleDaftar}
             disabled={!selectedRole}
-            className={`w-full py-2 rounded-md font-semibold font-inter text-white transition-all duration-200 
+            className={`w-full py-3 rounded-md font-bold font-inter text-white mt-4 transition-all duration-200 shadow-md
               ${
-                darkMode
-                  ? !selectedRole
-                    ? "bg-[#5A1414] text-white opacity-50 cursor-not-allowed"
-                    : "bg-[#5A1414] hover:bg-[#E53935] cursor-pointer"
-                  : !selectedRole
-                    ? "bg-[#333] text-white opacity-100 cursor-not-allowed"
-                    : "bg-[#333] hover:bg-[#0D0D0D] cursor-pointer"
+                !selectedRole
+                  ? "bg-gray-500 cursor-not-allowed opacity-50"
+                  : darkMode
+                    ? "bg-[#E53935] hover:bg-[#b71c1c] hover:scale-[1.02]"
+                    : "bg-[#0D0D0D] hover:bg-[#333] hover:scale-[1.02]"
               }
             `}
           >
-            DAFTAR
+            LANJUT DAFTAR →
           </button>
+          
+          <div className="text-center text-sm mt-2 font-inter">
+            <a
+              href="/login/users"
+              className={`font-semibold hover:underline transition-colors duration-200 ${
+                 darkMode ? "text-white hover:text-[#e53935]" : "text-[#1E1E1E] hover:text-[#e53935]"
+              }`}
+            >
+              ← Kembali ke Login
+            </a>
+          </div>
         </div>
       </div>
     </div>

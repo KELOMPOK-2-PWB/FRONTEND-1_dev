@@ -6,34 +6,27 @@ import { useRouter } from "next/navigation";
 const BASE_URL = process.env.NEXT_PUBLIC_BACKEND_URL || "https://be.ashura.web.id";
 const BACKEND_TOKEN = process.env.NEXT_PUBLIC_BACKEND_TOKEN || "q3948tp9qdyuprtqype4uitqp9v34ytqp934ciutpq9ieyp5iqvhrtniwuhrogiwyi45";
 
-export default function ForgotPasswordOtpPage() {
+export default function VerifyOtpPage() {
   const router = useRouter();
   const [darkMode, setDarkMode] = useState(true); // Default Dark Mode
   const [otp, setOtp] = useState("");
   const [email, setEmail] = useState("");
   const [message, setMessage] = useState("");
-  const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
 
-  // Ambil email dari sessionStorage (disimpan dari halaman sebelumnya)
+  // Ambil email dari sessionStorage saat halaman dibuka
   useEffect(() => {
-    const storedEmail = sessionStorage.getItem("resetEmail");
+    const storedEmail = sessionStorage.getItem("userEmail");
     if (storedEmail) setEmail(storedEmail);
-    else {
-      // Jika tidak ada email, kembalikan ke halaman input email
-      router.push("/forgotpassword");
-    }
-  }, [router]);
+  }, []);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setMessage("");
-    setError("");
     setLoading(true);
 
     try {
-      // 🔹 PERBAIKAN: Menggunakan endpoint yang benar sesuai screenshot API
-      const res = await fetch(`${BASE_URL}/api/auth/verify-reset-otp-password`, { 
+      const res = await fetch(`${BASE_URL}/api/auth/verify-otp`, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
@@ -45,23 +38,20 @@ export default function ForgotPasswordOtpPage() {
       const data = await res.json();
 
       if (res.ok) {
-        setMessage("OTP Valid! Silakan buat password baru.");
+        setMessage("OTP berhasil diverifikasi! Mengalihkan...");
         
-        const tokenFromServer = data.token || data.resetToken || data.data?.token || otp;
-        
-        // Simpan token dari server ke session
-        sessionStorage.setItem("resetOtp", tokenFromServer); 
-        // --------------------------------------------------
+        // Hapus data sesi setelah sukses
+        sessionStorage.removeItem("userEmail"); 
+        sessionStorage.removeItem("userRole");
 
-        // Redirect ke halaman New Password
-        setTimeout(() => router.push("/forgotpassword/newpassword"), 1500);
+        // Redirect ke halaman Login Universal
+        setTimeout(() => router.push("/login/users"), 1500);
       } else {
-        setError(data.message || "Kode OTP salah atau kadaluarsa.");
+        setMessage(data.message || "OTP salah atau kadaluarsa.");
       }
-      
     } catch (err) {
       console.error(err);
-      setError("Terjadi kesalahan server.");
+      setMessage("Terjadi kesalahan server.");
     } finally {
       setLoading(false);
     }
@@ -103,14 +93,14 @@ export default function ForgotPasswordOtpPage() {
             darkMode ? "bg-[#7A1F1F] text-white" : "bg-white text-[#1E1E1E]"
           }`}
         >
-          <h2 className="text-center text-[1.7rem] font-bold font-inter">
-            Verifikasi Reset
+          <h2 className="text-center text-[1.8rem] font-bold font-inter">
+            Verifikasi OTP
           </h2>
           <p className="text-center text-base font-medium mb-3 font-inter">
-            Masukkan kode OTP reset password yang dikirim ke email Anda.
+            Masukkan kode OTP yang telah dikirim ke email Anda.
           </p>
 
-          {/* Email Readonly */}
+          {/* Email otomatis terisi (Read Only) */}
           <input
             type="email"
             value={email}
@@ -143,17 +133,14 @@ export default function ForgotPasswordOtpPage() {
               loading ? "opacity-70 cursor-not-allowed" : ""
             }`}
           >
-            {loading ? "Memproses..." : "Verifikasi"}
+            {loading ? "Memverifikasi..." : "Verifikasi"}
           </button>
 
           {message && (
-            <p className={`text-center text-sm mt-2 font-semibold ${darkMode ? "text-green-400" : "text-green-600"}`}>
+            <p className={`text-center text-sm mt-2 ${
+                darkMode ? "text-gray-200" : "text-[#1E1E1E]"
+              }`}>
               {message}
-            </p>
-          )}
-          {error && (
-            <p className={`text-center text-sm mt-2 font-semibold ${darkMode ? "text-red-300" : "text-red-600"}`}>
-              {error}
             </p>
           )}
         </form>

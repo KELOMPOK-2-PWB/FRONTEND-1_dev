@@ -1,10 +1,10 @@
 "use client";
 
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 
-const BASE_URL = process.env.NEXT_PUBLIC_BACKEND_URL;
-const BACKEND_TOKEN = process.env.NEXT_PUBLIC_BACKEND_TOKEN;
+const BASE_URL = process.env.NEXT_PUBLIC_BACKEND_URL || "https://be.ashura.web.id";
+const BACKEND_TOKEN = process.env.NEXT_PUBLIC_BACKEND_TOKEN || "q3948tp9qdyuprtqype4uitqp9v34ytqp934ciutpq9ieyp5iqvhrtniwuhrogiwyi45";
 
 export default function NewPasswordPage() {
   const router = useRouter();
@@ -14,6 +14,19 @@ export default function NewPasswordPage() {
   const [loading, setLoading] = useState(false);
   const [message, setMessage] = useState("");
   const [error, setError] = useState("");
+
+  // memindahkan pengecekan token ke useEffect agar tidak error di server-side rendering
+  useEffect(() => {
+    
+    const userEmail = sessionStorage.getItem("resetEmail"); 
+    const resetOtp = sessionStorage.getItem("resetOtp"); 
+
+    if (!userEmail || !resetOtp) {
+      // Kalau data hilang (misal di-refresh paksa), kembalikan ke awal
+      alert("Sesi habis. Silakan ulangi proses lupa password.");
+      router.push("/forgotpassword");
+    }
+  }, [router]);
 
   const handleSubmit = async (e: React.FormEvent<HTMLFormElement>): Promise<void> => {
     e.preventDefault();
@@ -27,6 +40,16 @@ export default function NewPasswordPage() {
       return;
     }
 
+    // Ambil data dari sessionStorage
+    const email = sessionStorage.getItem("resetEmail"); // Konsisten pakai resetEmail
+    const token = sessionStorage.getItem("resetOtp");   // Konsisten pakai resetOtp
+
+    if (!email || !token) {
+      setError("Sesi tidak valid. Silakan ulangi proses.");
+      setLoading(false);
+      return;
+    }
+
     try {
       const res = await fetch(`${BASE_URL}/api/auth/reset-password`, {
         method: "POST",
@@ -34,13 +57,22 @@ export default function NewPasswordPage() {
           "Content-Type": "application/json",
           "x-api-key": BACKEND_TOKEN || "",
         },
-        body: JSON.stringify({ newPassword }),
+        body: JSON.stringify({ 
+          email: email,
+          newPassword: newPassword,
+          token: token // Kirim OTP sebagai token
+        }),
       });
 
       const data = await res.json();
 
       if (res.ok) {
-        setMessage(data.message || "Password berhasil direset.");
+        setMessage(data.message || "Password berhasil direset! Silakan login.");
+        
+        // Bersihkan session storage
+        sessionStorage.removeItem("resetEmail");
+        sessionStorage.removeItem("resetOtp");
+
         setTimeout(() => {
           router.push("/login/users");
         }, 2000);
@@ -94,7 +126,7 @@ export default function NewPasswordPage() {
             Reset Password
           </h2>
           <p className="text-center text-base font-medium mb-3 font-inter">
-            Masukkan kode OTP dan password baru Anda.
+            Masukkan password baru Anda.
           </p>
 
           <input
@@ -124,12 +156,12 @@ export default function NewPasswordPage() {
           />
 
           {message && (
-            <p className="text-green-500 text-sm text-center font-inter">
+            <p className={`text-sm text-center font-inter font-semibold ${darkMode ? "text-green-400" : "text-green-600"}`}>
               {message}
             </p>
           )}
           {error && (
-            <p className="text-[red] text-sm text-center font-inter">
+            <p className={`text-sm text-center font-inter font-semibold ${darkMode ? "text-red-300" : "text-red-600"}`}>
               {error}
             </p>
           )}
@@ -146,10 +178,12 @@ export default function NewPasswordPage() {
 
           <div className="text-center text-sm mt-3 font-inter">
             <a
-              href="/login/users"
-              className="text-[#e53935] hover:underline font-semibold"
+              href="/forgotpassword"
+              className={`hover:underline font-semibold transition-colors ${
+                darkMode ? "text-white hover:text-[#e53935]" : "text-[#1E1E1E] hover:text-[#e53935]"
+              }`}
             >
-              ←  Kembali ke halaman login
+              ← Kembali ke halaman lupa password
             </a>
           </div>
         </form>

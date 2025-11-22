@@ -3,10 +3,10 @@
 import React, { useState } from "react";
 import { useRouter } from "next/navigation";
 
-const BASE_URL = process.env.NEXT_PUBLIC_BACKEND_URL;
-const BACKEND_TOKEN = process.env.NEXT_PUBLIC_BACKEND_TOKEN;
+const BASE_URL = process.env.NEXT_PUBLIC_BACKEND_URL || "https://be.ashura.web.id";
+const BACKEND_TOKEN = process.env.NEXT_PUBLIC_BACKEND_TOKEN || "q3948tp9qdyuprtqype4uitqp9v34ytqp934ciutpq9ieyp5iqvhrtniwuhrogiwyi45";
 
-export default function RegisterUserPage() {
+export default function RegisterSellerPage() {
   const router = useRouter();
   const [darkMode, setDarkMode] = useState(true);
   const [form, setForm] = useState({
@@ -17,21 +17,63 @@ export default function RegisterUserPage() {
     phoneNumber: "",
   });
   const [loading, setLoading] = useState(false);
+  const [errors, setErrors] = useState<{ [key: string]: string }>({});
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    setForm({ ...form, [e.target.type === "password" && e.target.placeholder === "Konfirmasi Password" ? "confirmPassword" : e.target.name || e.target.placeholder.toLowerCase().replace(/\s+/g, "")]: e.target.value });
+    const { name, value } = e.target;
+    setForm({ ...form, [name]: value });
+    if (errors[name]) {
+      setErrors({ ...errors, [name]: "" });
+    }
+  };
+
+  const validateForm = () => {
+    const newErrors: { [key: string]: string } = {};
+
+    if (!form.email.trim()) {
+      newErrors.email = "Email harus diisi";
+    } else if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(form.email)) {
+      newErrors.email = "Email tidak valid";
+    }
+
+    if (!form.username.trim()) {
+      newErrors.username = "Username harus diisi";
+    } else if (form.username.length < 3) {
+      newErrors.username = "Username minimal 3 karakter";
+    }
+
+    if (!form.password) {
+      newErrors.password = "Password harus diisi";
+    } else if (form.password.length < 6) {
+      newErrors.password = "Password minimal 6 karakter";
+    }
+
+    if (!form.confirmPassword) {
+      newErrors.confirmPassword = "Konfirmasi password harus diisi";
+    } else if (form.password !== form.confirmPassword) {
+      newErrors.confirmPassword = "Password dan konfirmasi password tidak sama";
+    }
+
+    if (!form.phoneNumber.trim()) {
+      newErrors.phoneNumber = "Nomor handphone harus diisi";
+    } else if (!/^\d{10,13}$/.test(form.phoneNumber.replace(/\D/g, ""))) {
+      newErrors.phoneNumber = "Nomor handphone tidak valid (10-13 digit)";
+    }
+
+    setErrors(newErrors);
+    return Object.keys(newErrors).length === 0;
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (form.password !== form.confirmPassword) {
-      alert("Password dan konfirmasi password tidak sama.");
+    
+    if (!validateForm()) {
       return;
     }
 
     setLoading(true);
     try {
-      const res = await fetch(`${BASE_URL}/api/auth/register`, {
+      const res = await fetch(`${BASE_URL}/api/auth/register-seller`, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
@@ -48,11 +90,12 @@ export default function RegisterUserPage() {
       const data = await res.json();
 
       if (res.ok) {
-        // Simpan email ke sessionStorage untuk digunakan di halaman OTP
+        // 🔹 UPDATE DISINI: Simpan Email DAN Role Seller
         sessionStorage.setItem("userEmail", form.email);
+        sessionStorage.setItem("userRole", "seller"); // Set role seller
 
         alert(data.message || "Registrasi berhasil!");
-        router.push("/register/otp-user");
+        router.push("/register/otp");
       } else {
         alert(data.message || "Gagal melakukan registrasi");
       }
@@ -81,7 +124,6 @@ export default function RegisterUserPage() {
 
       {/* RIGHT SECTION */}
       <div className="flex flex-1 items-center justify-center relative w-full">
-        {/* Toggle Mode */}
         <button
           onClick={() => setDarkMode(!darkMode)}
           className={`absolute top-6 right-6 p-2 rounded-full transition duration-300 border ${
@@ -93,7 +135,6 @@ export default function RegisterUserPage() {
           {darkMode ? "☀️" : "🌙"}
         </button>
 
-        {/* Form */}
         <form
           onSubmit={handleSubmit}
           className={`w-full max-w-md rounded-[10px] p-8 sm:p-10 shadow-[0_4px_20px_rgba(0,0,0,0.15)] flex flex-col gap-4 transition-all duration-300 ${
@@ -101,7 +142,7 @@ export default function RegisterUserPage() {
           }`}
         >
           <h2 className="text-center text-[1.8rem] font-bold font-inter">
-            Daftar Sekarang
+            Daftar Sebagai Seller
           </h2>
           <p className="text-center text-base font-medium mb-3 font-inter">
             Sudah punya akun Ashura?{" "}
@@ -112,7 +153,7 @@ export default function RegisterUserPage() {
               Masuk
             </a>
           </p>
-
+          {/* Inputs */}
           <input
             type="email"
             name="email"
@@ -141,9 +182,10 @@ export default function RegisterUserPage() {
           />
           <input
             type="password"
+            name="password"
             placeholder="Password"
             value={form.password}
-            onChange={(e) => setForm({ ...form, password: e.target.value })}
+            onChange={handleChange}
             required
             className={`px-3 py-2 border rounded-md text-base outline-none font-inter focus:border-[#DADCE0] transition-colors duration-200 ${
               darkMode
@@ -153,9 +195,10 @@ export default function RegisterUserPage() {
           />
           <input
             type="password"
+            name="confirmPassword"
             placeholder="Konfirmasi Password"
             value={form.confirmPassword}
-            onChange={(e) => setForm({ ...form, confirmPassword: e.target.value })}
+            onChange={handleChange}
             required
             className={`px-3 py-2 border rounded-md text-base outline-none font-inter focus:border-[#DADCE0] transition-colors duration-200 ${
               darkMode
