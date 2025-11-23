@@ -14,8 +14,8 @@ export default function ForgotPasswordPage() {
   const [message, setMessage] = useState("");
   const [error, setError] = useState("");
 
-  const handleSubmit = async (e: React.FormEvent<HTMLFormElement>): Promise<void> => {   
-   e.preventDefault();
+  const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
+    e.preventDefault();
     setLoading(true);
     setMessage("");
     setError("");
@@ -33,11 +33,19 @@ export default function ForgotPasswordPage() {
       const data = await res.json();
 
       if (res.ok) {
-        setMessage(data.message || "Otp berhasil dikirim ke email anda.");
+        setMessage(data.message || "OTP berhasil dikirim ke email Anda.");
+        // Simpan email untuk tahap selanjutnya
+        sessionStorage.setItem("resetEmail", email); 
+        
+        setTimeout(() => {
+          // n ke halaman OTP khusus Forgot Password
+          router.push("/forgotpassword/otp");
+        }, 1500);
       } else {
-        setError(data.message || "Gagal mengirim OTP, coba lagi.");
+        setError(data.message || "Gagal mengirim OTP, pastikan email terdaftar.");
       }
     } catch (err) {
+      console.error(err);
       setError("Terjadi kesalahan pada koneksi server.");
     } finally {
       setLoading(false);
@@ -61,7 +69,6 @@ export default function ForgotPasswordPage() {
 
       {/* RIGHT SECTION */}
       <div className="flex flex-1 items-center justify-center relative w-full">
-        {/* Toggle Dark Mode */}
         <button
           onClick={() => setDarkMode(!darkMode)}
           className={`absolute top-6 right-6 p-2 rounded-full transition duration-300 border ${
@@ -73,11 +80,10 @@ export default function ForgotPasswordPage() {
           {darkMode ? "☀️" : "🌙"}
         </button>
 
-        {/* FORM */}
         <form
           onSubmit={handleSubmit}
           className={`w-full max-w-md rounded-[10px] p-8 sm:p-10 shadow-[0_4px_20px_rgba(0,0,0,0.15)] flex flex-col gap-4 transition-all duration-300 ${
-            darkMode ? "bg-[#1E1E1E] text-white" : "bg-white text-[#1E1E1E]"
+            darkMode ? "bg-[#7A1F1F] text-white" : "bg-white text-[#1E1E1E]"
           }`}
         >
           <h2 className="text-center text-[1.8rem] font-bold font-inter">
@@ -95,18 +101,18 @@ export default function ForgotPasswordPage() {
             required
             className={`px-3 py-2 border rounded-md text-base outline-none font-inter focus:border-[#e53935] transition-colors duration-200 ${
               darkMode
-                ? "border-[#555] bg-[#2C2C2C] text-white"
+                ? "border-[#DADCE0] bg-[#FFFFFF] text-[#3C4043]"
                 : "border-[#DADCE0] text-[#3C4043]"
             }`}
           />
 
           {message && (
-            <p className="text-green-500 text-sm text-center font-inter">
+            <p className="text-green-400 text-sm text-center font-inter font-medium">
               {message}
             </p>
           )}
           {error && (
-            <p className="text-red-500 text-sm text-center font-inter">
+            <p className="text-red-400 text-sm text-center font-inter font-medium">
               {error}
             </p>
           )}
@@ -124,9 +130,11 @@ export default function ForgotPasswordPage() {
           <div className="text-center text-sm mt-3 font-inter">
             <a
               href="/login/users"
-              className="text-[#e53935] hover:underline font-medium"
+              className={`font-semibold hover:underline transition-colors duration-200 ${
+                 darkMode ? "text-white hover:text-[#e53935]" : "text-[#1E1E1E] hover:text-[#e53935]"
+              }`}
             >
-              ← Kembali ke halaman login
+              ← Kembali ke Login
             </a>
           </div>
         </form>
