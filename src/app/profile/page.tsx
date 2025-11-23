@@ -1,150 +1,322 @@
+// src/app/profile/page.tsx
 "use client";
 
-import { useEffect, useState } from "react";
-import { useRouter } from "next/navigation";
+import React, { useState } from "react";
+import Navbar from "../../component/Element/Navbar";
 
-export default function NavbarUser() {
-  const router = useRouter();
+const UPLOAD_URL = process.env.NEXT_PUBLIC_UPLOAD_URL; // endpoint upload gambar, harus balas { message, url }
 
-  const [user, setUser] = useState<any>(null);
-  const [search, setSearch] = useState("");
+/* ======================= TABS ======================= */
 
-  useEffect(() => {
-    const storedUser = localStorage.getItem("userData");
-    if (storedUser) setUser(JSON.parse(storedUser));
-  }, []);
+type TabKey = "alamat" | "profil" | "password";
 
-  const logout = () => {
-    localStorage.removeItem("authToken");
-    localStorage.removeItem("userData");
-    router.push("/login/users");
+const TABS: { key: TabKey; label: string }[] = [
+  { key: "alamat", label: "Alamat" },
+  { key: "profil", label: "Profil" },
+  { key: "password", label: "Password" },
+];
+
+export default function UserProfilePage() {
+  const [activeTab, setActiveTab] = useState<TabKey>("profil");
+
+  return (
+    <div className="min-h-screen bg-[#4F0F0F] pt-[80px]">
+      {/* NAVBAR ATAS */}
+      <Navbar />
+
+      {/* CONTENT WRAPPER */}
+      <main className="max-w-6xl mx-auto px-5 py-6">
+        {/* TAB MENU */}
+        <div className="flex gap-2 mb-4">
+          {TABS.map((tab) => {
+            const isActive = tab.key === activeTab;
+            return (
+              <button
+                key={tab.key}
+                onClick={() => setActiveTab(tab.key)}
+                className={`px-4 py-1 text-sm font-semibold rounded-sm border ${
+                  isActive
+                    ? "bg-[#FF3B30] border-[#FF3B30] text-white"
+                    : "bg-black text-white border-black hover:bg-black/80"
+                }`}
+              >
+                {tab.label}
+              </button>
+            );
+          })}
+        </div>
+
+        {/* TAB CONTENT */}
+        {activeTab === "alamat" && <AlamatTab />}
+        {activeTab === "profil" && <ProfilTab />}
+        {activeTab === "password" && <PasswordTab />}
+      </main>
+    </div>
+  );
+}
+
+/* =========================================================
+   TAB ALAMAT / PASSWORD (placeholder sederhana)
+   ========================================================= */
+
+function AlamatTab() {
+  return (
+    <section className="bg-[#7A1616] border border-[#b06262] rounded-md text-white px-6 py-4">
+      <h2 className="text-lg font-bold mb-2">Alamat</h2>
+      <p className="text-sm text-gray-200">
+        Di sini nanti kamu bisa menampilkan dan mengatur alamat pengiriman
+        pengguna.
+      </p>
+    </section>
+  );
+}
+
+function PasswordTab() {
+  return (
+    <section className="bg-[#7A1616] border border-[#b06262] rounded-md text-white px-6 py-4">
+      <h2 className="text-lg font-bold mb-2">Ubah Password</h2>
+      <p className="text-sm text-gray-200">
+        Form ubah password bisa ditempatkan di bagian ini.
+      </p>
+    </section>
+  );
+}
+
+/* =========================================================
+   TAB PROFIL – DESAIN + UPLOAD FOTO KE API
+   ========================================================= */
+
+function ProfilTab() {
+  const [avatarPreview, setAvatarPreview] = useState<string | null>(null);
+  const [avatarUrl, setAvatarUrl] = useState<string | null>(null); // URL dari API
+  const [uploading, setUploading] = useState(false);
+  const [uploadError, setUploadError] = useState<string | null>(null);
+
+  const handleAvatarChange = async (
+    e: React.ChangeEvent<HTMLInputElement>
+  ) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    // preview lokal dulu biar kerasa responsif
+    const localReader = new FileReader();
+    localReader.onload = () => {
+      setAvatarPreview(localReader.result as string);
+    };
+    localReader.readAsDataURL(file);
+
+    if (!UPLOAD_URL) {
+      setUploadError(
+        "URL upload belum dikonfigurasi (NEXT_PUBLIC_UPLOAD_URL)."
+      );
+      return;
+    }
+
+    try {
+      setUploading(true);
+      setUploadError(null);
+
+      const formData = new FormData();
+
+      // SESUAIKAN nama field ini dengan backend kamu (contoh: "image")
+      formData.append("image", file);
+
+      const res = await fetch(UPLOAD_URL, {
+        method: "POST",
+        body: formData,
+      });
+
+      const data = await res.json();
+
+      if (!res.ok) {
+        throw new Error(data.message || "Gagal upload gambar");
+      }
+
+      // API kamu balas: { "message": "Gambar berhasil di-upload!", "url": "https://..." }
+      if (!data.url) {
+        throw new Error("URL gambar tidak ditemukan pada respon API.");
+      }
+
+      setAvatarUrl(data.url);
+      setAvatarPreview(data.url); // pakai URL final dari server
+      console.log("Upload sukses, url:", data.url);
+    } catch (err: unknown) {
+      console.error(err);
+
+      if (err instanceof Error) {
+        setUploadError(err.message || "Terjadi kesalahan saat upload gambar.");
+      } else {
+        setUploadError("Terjadi kesalahan saat upload gambar.");
+      }
+    } finally {
+      setUploading(false);
+    }
+  };
+
+  // contoh data dummy, nanti bisa diganti dari backend
+  const profileData = {
+    nama: "Pangeran Christiano",
+    tglLahir: "Tambah Tanggal Lahir",
+    jenisKelamin: "Tambah Jenis Kelamin",
+    email: "blablabla@gmail.com",
+    noHp: "6288888888888",
   };
 
   return (
-    <div className="min-h-screen bg-[#4F0F0F]">
+    <section className="bg-[#7A1616] border border-[#b06262] rounded-md text-white px-6 py-6">
+      <div className="grid gap-8 md:grid-cols-[280px,1fr]">
+        {/* KOLom KIRI: FOTO + TOMBOL */}
+        <div className="flex flex-col items-stretch">
+          {/* Kartu foto */}
+          <div className="bg-[#7A1616] border border-[#b06262] rounded-md px-4 pt-4 pb-3 flex flex-col items-center">
+            {/* Avatar */}
+            <div className="w-[180px] h-[180px] bg-[#F5C14B] rounded-md flex items-center justify-center text-6xl mb-3 overflow-hidden">
+              {avatarPreview ? (
+                <img
+                  src={avatarPreview}
+                  alt="Avatar preview"
+                  className="w-full h-full object-cover rounded-md"
+                />
+              ) : (
+                <span>😆</span>
+              )}
+            </div>
 
-      {/* ================= NAVBAR ================= */}
-      <nav className="w-full bg-[#7A1616] text-white px-5 py-3 flex items-center justify-between shadow-lg">
-        
-        {/* LEFT */}
-        <div className="flex items-center gap-6">
-          <div onClick={() => router.push("/")} className="cursor-pointer flex items-center gap-2">
-            <img src="/A-logo.png" className="w-8 h-8" />
-            <span className="font-bold text-lg">SHOP</span>
-          </div>
-
-          <button className="bg-[#8C1B1B] hover:bg-[#9a1d1d] px-4 py-2 rounded-md text-sm">
-            Kategori
-          </button>
-
-          <div className="bg-[#8C1B1B] flex items-center px-3 py-2 rounded-md w-[350px]">
+            {/* Input file hidden */}
             <input
-              type="text"
-              className="bg-transparent outline-none w-full text-white placeholder-gray-200 text-sm"
-              placeholder="Cari di Ashura"
-              value={search}
-              onChange={(e) => setSearch(e.target.value)}
+              id="avatar-input"
+              type="file"
+              accept="image/*"
+              className="hidden"
+              onChange={handleAvatarChange}
             />
-          </div>
-        </div>
 
-        {/* RIGHT */}
-        <div className="flex items-center gap-6">
-          <div className="relative cursor-pointer text-xl">
-            🛒
-            <span className="absolute -top-2 -right-3 bg-pink-500 text-xs px-1 rounded-full">9</span>
-          </div>
-
-          <div className="cursor-pointer text-xl">🔔</div>
-          <div className="cursor-pointer text-xl">✉️</div>
-
-          {user ? (
-            <div className="flex items-center gap-2">
-              <div
-                onClick={() => router.push("/dashboard/user")}
-                className="bg-white text-black font-bold w-8 h-8 flex items-center justify-center rounded-full cursor-pointer"
-              >
-                {user.username?.charAt(0).toUpperCase() ?? "U"}
-              </div>
-              <button onClick={logout} className="bg-black/40 px-3 py-1 rounded-md text-sm">Logout</button>
-            </div>
-          ) : (
+            {/* Tombol pilih foto */}
             <button
-              onClick={() => router.push("/login/users")}
-              className="bg-white text-black px-4 py-2 rounded-md font-semibold text-sm"
+              type="button"
+              onClick={() =>
+                document.getElementById("avatar-input")?.click()
+              }
+              className="w-full mt-1 bg-[#c02c2c] hover:bg-[#d33434] text-white text-xs py-[6px] rounded-md disabled:opacity-60"
+              disabled={uploading}
             >
-              Masuk
+              {uploading ? "Mengupload..." : "Pilih Foto"}
             </button>
-          )}
-        </div>
 
-      </nav>
+            {/* Info file */}
+            <p className="mt-3 text-[10px] leading-snug text-center text-gray-200">
+              Batas file maksimal 10.000.000 bytes (10 Megabytes).
+              <br />
+              Ekstensi file yang diperbolehkan: .JPG, .JPEG, .PNG
+            </p>
 
-      {/* ================= HERO BANNER ================= */}
-      <section className="w-full mt-1">
-        <div className="relative w-full h-[260px] md:h-[320px] overflow-hidden">
+            {/* Pesan error upload */}
+            {uploadError && (
+              <p className="mt-2 text-[10px] text-red-200">{uploadError}</p>
+            )}
 
-          {/* Banner */}
-          <img
-            src="/hero.jpg"
-            alt="Hero Banner"
-            className="w-full h-full object-cover"
-          />
-
-          {/* TEXT */}
-          <div className="absolute top-10 left-10 text-orange-400 font-bold text-3xl md:text-4xl drop-shadow-xl">
-            Discover New <br />
-            Collection
+            {/* URL yang sudah tersimpan (opsional ditampilkan) */}
+            {avatarUrl && (
+              <p className="mt-2 text-[10px] text-green-200 break-all">
+                URL tersimpan:
+                <br />
+                {avatarUrl}
+              </p>
+            )}
           </div>
 
-          {/* LEFT BUTTON */}
-          <button
-            className="absolute left-3 top-1/2 -translate-y-1/2 bg-white w-10 h-10 rounded-full flex items-center justify-center shadow-lg hover:scale-110 transition"
-            type="button"
-          >
-            <img src="/left.svg" className="w-5 h-5" />
-          </button>
+          {/* Garis pemisah vertikal (di mobile jadi horizontal) */}
+          <div className="hidden md:block w-px bg-[#b06262] self-center my-4 h-32" />
 
-          {/* RIGHT BUTTON */}
-          <button
-            className="absolute right-3 top-1/2 -translate-y-1/2 bg-white w-10 h-10 rounded-full flex items-center justify-center shadow-lg hover:scale-110 transition"
-            type="button"
-          >
-            <img src="/right.svg" className="w-5 h-5" />
-          </button>
+          {/* Tombol PIN & Password */}
+          <div className="mt-4 flex flex-col gap-2">
+            <button
+              type="button"
+              className="w-full bg-black flex items-center justify-center gap-2 text-sm py-2 rounded-md hover:bg-black/80"
+            >
+              <span>🔒</span>
+              <span>PIN Ashura</span>
+            </button>
 
+            <button
+              type="button"
+              className="w-full bg-[#4F0F0F] border border-black flex items-center justify-center gap-2 text-sm py-2 rounded-md hover:bg-[#3a0b0b]"
+            >
+              <span>🔑</span>
+              <span>Ubah Password</span>
+            </button>
+          </div>
         </div>
-      </section>
 
-      {/* ================= PRODUK EKSKLUSIF ================= */}
-      <section className="w-full flex justify-center mt-6 mb-10 px-4">
-        <div className="w-full max-w-5xl bg-[#7A1616] border border-[#9a3a3a] rounded-xl px-6 py-5 shadow-xl">
-          <h2 className="text-center text-white font-bold text-lg mb-4">Produk Eksklusif</h2>
+        {/* KOLom KANAN: DATA PROFIL */}
+        <div className="flex flex-col gap-6">
+          {/* Biodata diri */}
+          <div>
+            <h2 className="text-base font-bold mb-4">Ubah Biodata Diri</h2>
 
-          <div className="flex justify-between gap-4 md:gap-8">
-
-            {/* CARD 1 */}
-            <div className="flex flex-col w-32 md:w-40 bg-black rounded-md overflow-hidden shadow-lg">
-              <div className="h-24 md:h-28 bg-gray-300" />
-              <div className="flex-1 flex flex-col items-center justify-between py-2 text-white text-xs">
-                <div className="text-center leading-tight">Nama produk <br /> Harga</div>
-                <button className="mt-2 bg-gray-200 text-black text-[10px] px-4 py-1 rounded">beli</button>
-              </div>
+            <div className="space-y-3 text-sm">
+              <RowLabelValue
+                label="Nama"
+                value={profileData.nama}
+                actionLabel="Ubah"
+              />
+              <RowLabelValue
+                label="Tanggal Lahir"
+                value={profileData.tglLahir}
+                actionLabel="Ubah"
+              />
+              <RowLabelValue
+                label="Jenis Kelamin"
+                value={profileData.jenisKelamin}
+                actionLabel="Ubah"
+              />
             </div>
+          </div>
 
-            {/* CARD 2 */}
-            <div className="w-32 md:w-40 h-40 md:h-44 bg-black rounded-md shadow-lg" />
+          {/* Garis pembatas */}
+          <div className="border-t border-[#b06262] pt-4">
+            <h2 className="text-base font-bold mb-4">Ubah Kontak</h2>
 
-            {/* CARD 3 */}
-            <div className="w-32 md:w-40 h-40 md:h-44 bg-black rounded-md shadow-lg" />
-
-            {/* CARD 4 */}
-            <div className="w-32 md:w-40 h-40 md:h-44 bg-black rounded-md shadow-lg" />
-
+            <div className="space-y-3 text-sm">
+              <RowLabelValue
+                label="Email"
+                value={profileData.email}
+                actionLabel="Ubah"
+              />
+              <RowLabelValue
+                label="Nomor HP"
+                value={profileData.noHp}
+                actionLabel="Ubah"
+              />
+            </div>
           </div>
         </div>
-      </section>
+      </div>
+    </section>
+  );
+}
 
+/* Komponen kecil untuk baris "Label | Value | Ubah" */
+
+type RowProps = {
+  label: string;
+  value: string;
+  actionLabel?: string;
+};
+
+function RowLabelValue({ label, value, actionLabel }: RowProps) {
+  return (
+    <div className="flex flex-col md:flex-row md:items-center md:gap-6 text-sm">
+      <div className="w-32 text-gray-200">{label}</div>
+      <div className="flex-1 text-white">{value}</div>
+      {actionLabel && (
+        <button
+          type="button"
+          className="mt-1 md:mt-0 text-xs text-[#FFD6D6] hover:underline"
+        >
+          {actionLabel}
+        </button>
+      )}
     </div>
   );
 }
