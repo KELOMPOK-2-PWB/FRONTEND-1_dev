@@ -140,9 +140,14 @@ function ProfilTab() {
       setAvatarUrl(data.url);
       setAvatarPreview(data.url); // pakai URL final dari server
       console.log("Upload sukses, url:", data.url);
-    } catch (err: any) {
+    } catch (err: unknown) {
       console.error(err);
-      setUploadError(err.message || "Terjadi kesalahan saat upload gambar.");
+
+      if (err instanceof Error) {
+        setUploadError(err.message || "Terjadi kesalahan saat upload gambar.");
+      } else {
+        setUploadError("Terjadi kesalahan saat upload gambar.");
+      }
     } finally {
       setUploading(false);
     }

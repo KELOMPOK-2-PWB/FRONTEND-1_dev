@@ -25,48 +25,52 @@ export default function HomePage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
-    useEffect(() => {
-        const fetchProducts = async () => {
-  if (typeof window === "undefined") return;
+  useEffect(() => {
+    const fetchProducts = async () => {
+      if (typeof window === "undefined") return;
 
-  const token = localStorage.getItem("authToken");
+      const token = localStorage.getItem("authToken");
 
-  console.log("TOKEN DI LOCALSTORAGE:", token);
+      console.log("TOKEN DI LOCALSTORAGE:", token);
 
-  if (!token) {
-    setError("Token tidak ditemukan. Silakan login ulang.");
-    setLoading(false);
-    return;
-  }
+      if (!token) {
+        setError("Token tidak ditemukan. Silakan login ulang.");
+        setLoading(false);
+        return;
+      }
 
-  try {
-    const res = await fetch(`${BASE_URL}/api/products-users`, {
-  method: "GET",
-  headers: {
-    "Content-Type": "application/json",
-    Authorization: `Bearer ${token}`, // standar
-    "x-auth-token": token || "",      // jaga-jaga backend baca dari sini
-    "x-api-key": BACKEND_TOKEN || "", // API key
-  },
-});
+      try {
+        const res = await fetch(`${BASE_URL}/api/products-users`, {
+          method: "GET",
+          headers: {
+            "Content-Type": "application/json",
+            Authorization: `Bearer ${token}`, // standar
+            "x-auth-token": token || "", // jaga-jaga backend baca dari sini
+            "x-api-key": BACKEND_TOKEN || "", // API key
+          },
+        });
 
-    const data = await res.json();
+        const data = await res.json();
 
-    console.log("RESPON BACKEND:", data);
+        console.log("RESPON BACKEND:", data);
 
-    if (!res.ok) {
-      throw new Error(data.message || "Gagal mengambil produk");
-    }
+        if (!res.ok) {
+          throw new Error(data.message || "Gagal mengambil produk");
+        }
 
-    setProducts(Array.isArray(data) ? data : data.data || []);
-  } catch (err: any) {
-    console.error("ERROR FETCH:", err);
-    setError(err.message);
-  } finally {
-    setLoading(false);
-  }
-};
+        setProducts(Array.isArray(data) ? data : data.data || []);
+      } catch (err: unknown) {
+        console.error("ERROR FETCH:", err);
 
+        if (err instanceof Error) {
+          setError(err.message);
+        } else {
+          setError("Terjadi kesalahan saat mengambil produk.");
+        }
+      } finally {
+        setLoading(false);
+      }
+    };
 
     fetchProducts();
   }, []);
@@ -90,7 +94,7 @@ export default function HomePage() {
         <div className="relative w-full h-[260px] md:h-[320px] overflow-hidden">
           <img
             src="/hero.jpg"
-            alt="Hero Banner"
+            alt="Banner promosi Ashura Shop"
             className="w-full h-full object-cover"
           />
 
@@ -103,14 +107,22 @@ export default function HomePage() {
             className="absolute left-3 top-1/2 -translate-y-1/2 bg-white w-10 h-10 rounded-full flex items-center justify-center shadow-lg hover:scale-110 transition"
             type="button"
           >
-            <img src="/left.png" className="w-5 h-5" />
+            <img
+              src="/left.png"
+              alt="Slide sebelumnya"
+              className="w-5 h-5"
+            />
           </button>
 
           <button
             className="absolute right-3 top-1/2 -translate-y-1/2 bg-white w-10 h-10 rounded-full flex items-center justify-center shadow-lg hover:scale-110 transition"
             type="button"
           >
-            <img src="/right.png" className="w-5 h-5" />
+            <img
+              src="/right.png"
+              alt="Slide berikutnya"
+              className="w-5 h-5"
+            />
           </button>
         </div>
       </section>

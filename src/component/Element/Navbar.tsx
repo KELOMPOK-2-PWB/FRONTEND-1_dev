@@ -3,23 +3,43 @@
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 
+type User = {
+  username?: string;
+};
+
+type CartItem = {
+  name: string;
+  quantity: number;
+  price: number | string;
+};
+
+type NotifItem = {
+  title: string;
+  message: string;
+};
+
+type MessageItem = {
+  from: string;
+  preview: string;
+};
+
 export default function Navbar() {
   const router = useRouter();
 
-  const [user, setUser] = useState<any>(null);
+  const [user, setUser] = useState<User | null>(null);
   const [search, setSearch] = useState("");
   const [isCartOpen, setIsCartOpen] = useState(false);
   const [isNotifOpen, setIsNotifOpen] = useState(false);
   const [isMessageOpen, setIsMessageOpen] = useState(false);
 
   // TODO: nanti isi dari backend / context
-  const [cartItems] = useState<any[]>([]);
-  const [notifItems] = useState<any[]>([]);
-  const [messageItems] = useState<any[]>([]);
+  const [cartItems] = useState<CartItem[]>([]);
+  const [notifItems] = useState<NotifItem[]>([]);
+  const [messageItems] = useState<MessageItem[]>([]);
 
   useEffect(() => {
     const storedUser = localStorage.getItem("userData");
-    if (storedUser) setUser(JSON.parse(storedUser));
+    if (storedUser) setUser(JSON.parse(storedUser) as User);
   }, []);
 
   const logout = () => {
@@ -57,7 +77,7 @@ export default function Navbar() {
             className="cursor-pointer flex items-center gap-2"
           >
             {/* logo A agak lebih besar */}
-            <img src="/A-logo.png" className="w-10 h-10" />
+            <img src="/A-logo.png" alt="Ashura Shop Logo" className="w-10 h-10" />
             <span className="font-bold text-xl">SHOP</span>
           </div>
 

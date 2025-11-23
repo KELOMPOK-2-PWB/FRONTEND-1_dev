@@ -34,16 +34,6 @@ const STATUS_FILTERS: { key: StatusKey; label: string }[] = [
   { key: "dikomplain", label: "Dikomplain" },
 ];
 
-type Order = {
-  id: string;
-  date: string;
-  status: StatusKey;
-  productName: string;
-  total: number;
-};
-
-const MOCK_ORDERS: Order[] = []; // kosong → muncul empty state
-
 export default function UserDashboardPage() {
   const [activeTab, setActiveTab] = useState<TabKey>("pesanan");
 
