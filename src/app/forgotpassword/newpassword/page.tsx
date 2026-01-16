@@ -17,9 +17,8 @@ export default function NewPasswordPage() {
 
   // memindahkan pengecekan token ke useeffect agar tidak error di server-side rendering
   useEffect(() => {
-    
-    const userEmail = sessionStorage.getItem("resetEmail"); 
-    const resetOtp = sessionStorage.getItem("resetOtp"); 
+    const userEmail = sessionStorage.getItem("resetEmail");
+    const resetOtp = sessionStorage.getItem("resetOtp");
 
     if (!userEmail || !resetOtp) {
       // Kalau data hilang (misal di-refresh paksa), kembalikan ke awal
@@ -28,7 +27,9 @@ export default function NewPasswordPage() {
     }
   }, [router]);
 
-  const handleSubmit = async (e: React.FormEvent<HTMLFormElement>): Promise<void> => {
+  const handleSubmit = async (
+    e: React.FormEvent<HTMLFormElement>
+  ): Promise<void> => {
     e.preventDefault();
     setLoading(true);
     setMessage("");
@@ -42,7 +43,7 @@ export default function NewPasswordPage() {
 
     // ambil data dari sessionStorage
     const email = sessionStorage.getItem("resetEmail"); // Konsisten pakai resetEmail
-    const token = sessionStorage.getItem("resetOtp");   // Konsisten pakai resetOtp
+    const token = sessionStorage.getItem("resetOtp"); // Konsisten pakai resetOtp
 
     if (!email || !token) {
       setError("Sesi tidak valid. Silakan ulangi proses.");
@@ -57,10 +58,10 @@ export default function NewPasswordPage() {
           "Content-Type": "application/json",
           "x-api-key": BACKEND_TOKEN || "",
         },
-        body: JSON.stringify({ 
+        body: JSON.stringify({
           email: email,
           newPassword: newPassword,
-          token: token // otp token
+          token: token, // otp token
         }),
       });
 
@@ -68,7 +69,7 @@ export default function NewPasswordPage() {
 
       if (res.ok) {
         setMessage(data.message || "Password berhasil direset! Silakan login.");
-        
+
         // Bersihkan session storage
         sessionStorage.removeItem("resetEmail");
         sessionStorage.removeItem("resetOtp");
@@ -156,12 +157,20 @@ export default function NewPasswordPage() {
           />
 
           {message && (
-            <p className={`text-sm text-center font-inter font-semibold ${darkMode ? "text-green-400" : "text-green-600"}`}>
+            <p
+              className={`text-sm text-center font-inter font-semibold ${
+                darkMode ? "text-green-400" : "text-green-600"
+              }`}
+            >
               {message}
             </p>
           )}
           {error && (
-            <p className={`text-sm text-center font-inter font-semibold ${darkMode ? "text-red-300" : "text-red-600"}`}>
+            <p
+              className={`text-sm text-center font-inter font-semibold ${
+                darkMode ? "text-red-300" : "text-red-600"
+              }`}
+            >
               {error}
             </p>
           )}
@@ -180,7 +189,9 @@ export default function NewPasswordPage() {
             <a
               href="/forgotpassword"
               className={`hover:underline font-semibold transition-colors ${
-                darkMode ? "text-white hover:text-[#e53935]" : "text-[#1E1E1E] hover:text-[#e53935]"
+                darkMode
+                  ? "text-white hover:text-[#e53935]"
+                  : "text-[#1E1E1E] hover:text-[#e53935]"
               }`}
             >
               ← Kembali ke halaman lupa password
