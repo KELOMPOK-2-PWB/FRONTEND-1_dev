@@ -118,7 +118,7 @@ export default function SellerDashboardPage() {
 
     fetch(`${BASE_URL}/api/products`, { headers })
       .then((r) => r.json())
-      .then((d) => setProducts(d?.data || []))
+      .then((d) => setProducts(Array.isArray(d) ? d : d.data || []))
       .finally(() => setLoading(false));
   }, [token]);
 
@@ -150,6 +150,48 @@ export default function SellerDashboardPage() {
       .then((d) => setAddresses(Array.isArray(d) ? d : []));
   }, [token, activeMenu]);
 
+  const processOrder = async (orderId: string) => {
+    const res = await fetch(
+      `${BASE_URL}/api/seller/orders/${orderId}/process`,
+      {
+        method: "PUT",
+        headers,
+        body: JSON.stringify({
+          message: "Status diubah menjadi Sedang Dikemas",
+          status: "packing",
+        }),
+      },
+    );
+
+    const data = await res.json();
+    alert(data.message || "Pesanan diproses");
+    setOrders((prev) =>
+      prev.map((o) => (o._id === orderId ? { ...o, status: "packing" } : o)),
+    );
+  };
+
+  const shipOrder = async (orderId: string) => {
+    const resiOrder = prompt("Masukkan nomor resi");
+    const courier = prompt("Masukkan nama kurir");
+
+    if (!resiOrder || !courier) return;
+
+    const res = await fetch(`${BASE_URL}/api/seller/orders/${orderId}/ship`, {
+      method: "PUT",
+      headers,
+      body: JSON.stringify({
+        resiOrder,
+        courier,
+      }),
+    });
+
+    const data = await res.json();
+    alert(data.message || "Pesanan dikirim");
+
+    setOrders((prev) =>
+      prev.map((o) => (o._id === orderId ? { ...o, status: "sent" } : o)),
+    );
+  };
   /* ================= ACTION ================= */
   const updateProfile = async () => {
     await fetch(`${BASE_URL}/api/seller/profile`, {
@@ -227,10 +269,10 @@ export default function SellerDashboardPage() {
             {m === "dashboard"
               ? "Dashboard"
               : m === "produk"
-              ? "Produk"
-              : m === "pesanan"
-              ? "Daftar Pesanan"
-              : "Profile"}
+                ? "Produk"
+                : m === "pesanan"
+                  ? "Daftar Pesanan"
+                  : "Profile"}
           </button>
         ))}
 
@@ -255,9 +297,7 @@ export default function SellerDashboardPage() {
             <div className="flex justify-between mb-6">
               <h1 className="text-xl font-bold">Produk</h1>
               <button
-                onClick={() =>
-                  router.push("/dashboardseller/tambah-produk")
-                }
+                onClick={() => router.push("/dashboardseller/tambah-produk")}
                 className="bg-black px-4 py-2 rounded"
               >
                 Tambahkan Produk
@@ -286,69 +326,81 @@ export default function SellerDashboardPage() {
           </>
         )}
 
-       {activeMenu === "pesanan" && (
-  <>
-    <h1 className="text-xl font-bold mb-6">
-      Daftar Pesanan Masuk
-    </h1>
+        {activeMenu === "pesanan" && (
+          <>
+            <h1 className="text-xl font-bold mb-6">Daftar Pesanan Masuk</h1>
 
-    {orders.length === 0 && (
-      <p className="text-white/70">Belum ada pesanan</p>
-    )}
+            {orders.length === 0 && (
+              <p className="text-white/70">Belum ada pesanan</p>
+            )}
 
-    <div className="space-y-4">
-      {orders.map((o) => (
-        <div
-          key={o._id}
-          className="bg-white text-black p-4 rounded"
-        >
-          <div className="flex justify-between mb-2">
-            <b>{o.uniqueCode}</b>
-            <span className="text-sm">
-              Status: {o.status}
-            </span>
-          </div>
+            <div className="space-y-4">
+              {orders.map((o) => (
+                <div key={o._id} className="bg-white text-black p-4 rounded">
+                  <div className="flex justify-between mb-2">
+                    <b>{o.uniqueCode}</b>
+                    <span className="text-sm">Status: {o.status}</span>
+                  </div>
 
-          <p className="text-sm">
-            Pembeli: {o.user.name} ({o.user.email})
-          </p>
+                  <p className="text-sm">
+                    Pembeli: {o.user.name} ({o.user.email})
+                  </p>
 
-          <p className="text-sm">
-            Alamat: {o.shippingAddress.street},{" "}
-            {o.shippingAddress.city}
-          </p>
+                  <p className="text-sm">
+                    Alamat: {o.shippingAddress.street}, {o.shippingAddress.city}
+                  </p>
 
-          <div className="mt-3 border-t pt-2">
-            {o.items.map((i, idx) => (
-              <div
-                key={idx}
-                className="flex justify-between text-sm"
-              >
-                <span>
-                  {i.product.name} × {i.quantity}
-                </span>
-                <span>
-                  Rp {i.price.toLocaleString("id-ID")}
-                </span>
-              </div>
-            ))}
-          </div>
+                  <div className="mt-3 border-t pt-2">
+                    {o.items.map((i, idx) => (
+                      <div key={idx} className="flex justify-between text-sm">
+                        <span>
+                          {i.product.name} × {i.quantity}
+                        </span>
+                        <span>Rp {i.price.toLocaleString("id-ID")}</span>
+                      </div>
+                    ))}
+                  </div>
+                  <div className="mt-4 flex gap-2">
+                    {["waiting_verification", "processed"].includes(
+                      o.status,
+                    ) && (
+                      <button
+                        onClick={() => processOrder(o._id)}
+                        className="bg-yellow-500 px-3 py-1 rounded text-white text-sm cursor-pointer relative z-10"
+                      >
+                        Packing Barang
+                      </button>
+                    )}
 
-          {o.paymentProof && (
-            <a
-              href={o.paymentProof}
-              target="_blank"
-              className="inline-block mt-3 text-blue-600 underline text-sm"
-            >
-              Lihat Bukti Pembayaran
-            </a>
-          )}
-        </div>
-      ))}
-    </div>
-  </>
-)}
+                    {o.status === "packing" && (
+                      <button
+                        onClick={() => shipOrder(o._id)}
+                        className="bg-green-600 px-3 py-1 rounded text-white text-sm cursor-pointer relative z-10"
+                      >
+                        Kirim Barang
+                      </button>
+                    )}
 
+                    {o.status === "sent" && (
+                      <span className="text-sm text-green-700 font-semibold">
+                        Pesanan sudah dikirim
+                      </span>
+                    )}
+                  </div>
+                  {o.paymentProof && (
+                    <a
+                      href={o.paymentProof}
+                      target="_blank"
+                      className="inline-block mt-3 text-blue-600 underline text-sm"
+                    >
+                      Lihat Bukti Pembayaran
+                    </a>
+                  )}
+                </div>
+              ))}
+            </div>
+          </>
+        )}
 
         {activeMenu === "profile" && (
           <>

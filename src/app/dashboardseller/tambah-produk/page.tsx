@@ -6,11 +6,8 @@ import { useRouter } from "next/navigation";
 const BASE_URL = process.env.NEXT_PUBLIC_BACKEND_URL;
 const BACKEND_TOKEN = process.env.NEXT_PUBLIC_BACKEND_TOKEN;
 
-// 🔹 UPLOADER CONFIG (SESUIAI SPEC KAMU)
-const UPLOAD_BASE = process.env.UPLOAD_BASE;
-const UPLOAD_ENDPOINT = process.env.UPLOAD_ENDPOINT;
-const UPLOAD_APIKEY = process.env.UPLOAD_APIKEY;
-
+const UPLOADER_BASE_URL = process.env.NEXT_PUBLIC_UPLOAD_BASE;
+const UPLOADER_API_KEY = process.env.NEXT_PUBLIC_UPLOAD_APIKEY;
 
 export default function TambahProdukPage() {
   const router = useRouter();
@@ -26,9 +23,10 @@ export default function TambahProdukPage() {
     price: "",
     quantity: "",
     images: [] as string[],
+    dropStart: "",
+    dropEnd: "",
   });
 
-  /* ================= AUTH ================= */
   useEffect(() => {
     const t = localStorage.getItem("authToken");
     const userRaw = localStorage.getItem("userData");
@@ -47,19 +45,15 @@ export default function TambahProdukPage() {
     setToken(t);
   }, [router]);
 
-  /* ================= FORM CHANGE ================= */
   const handleChange = (
     e: React.ChangeEvent<
       HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement
-    >
+    >,
   ) => {
     setForm({ ...form, [e.target.name]: e.target.value });
   };
 
-  /* ================= UPLOAD IMAGE (FIXED & SAFE) ================= */
-  const handleUploadImage = async (
-    e: React.ChangeEvent<HTMLInputElement>
-  ) => {
+  const handleUploadImage = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
 
@@ -77,51 +71,27 @@ export default function TambahProdukPage() {
 
     try {
       const formData = new FormData();
-      // 🔑 KEY SESUAI SPEC: "ima"
-      formData.append("ima", file);
+      formData.append("image", file); 
 
       const res = await fetch(
-        `${UPLOAD_BASE}${UPLOAD_ENDPOINT}?apikey=${UPLOAD_APIKEY}`,
+        `${UPLOADER_BASE_URL}?apikey=${UPLOADER_API_KEY}`,
         {
           method: "POST",
           body: formData,
-        }
+        },
       );
 
-      // ⚠️ uploader TIDAK selalu JSON → harus aman
-      const rawText = await res.text();
-      let parsed: any = null;
+      const data = await res.json();
 
-      try {
-        parsed = JSON.parse(rawText);
-      } catch {
-        // response bukan JSON → normal
-        console.warn("Uploader response (non-JSON):", rawText);
-      }
-
-      if (!res.ok) {
+      if (!res.ok || !data.url) {
+        console.error(data);
         alert("Gagal upload gambar");
-        return;
-      }
-
-      // 🔎 ambil URL dari SEMUA kemungkinan
-      const imageUrl =
-        parsed?.url ||
-        parsed?.data?.url ||
-        parsed?.result ||
-        (typeof rawText === "string" && rawText.startsWith("http")
-          ? rawText
-          : null);
-
-      if (!imageUrl) {
-        console.error("Uploader response:", rawText);
-        alert("URL gambar tidak ditemukan");
         return;
       }
 
       setForm((prev) => ({
         ...prev,
-        images: [...prev.images, imageUrl],
+        images: [...prev.images, data.url],
       }));
     } catch (err) {
       console.error("UPLOAD ERROR:", err);
@@ -131,10 +101,14 @@ export default function TambahProdukPage() {
     }
   };
 
-  /* ================= SUBMIT PRODUCT ================= */
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!token) return;
+
+    if (form.images.length === 0) {
+      alert("Minimal 1 gambar produk");
+      return;
+    }
 
     setLoading(true);
 
@@ -152,13 +126,21 @@ export default function TambahProdukPage() {
           category: form.category,
           price: Number(form.price),
           quantity: Number(form.quantity),
-          images: form.images, // ✅ dari uploader
+          discount: 0,
+          images: form.images,
+          dropStart: new Date(form.dropStart).toISOString(),
+          dropEnd: new Date(form.dropEnd).toISOString(),
         }),
       });
+      if (new Date(form.dropEnd) <= new Date(form.dropStart)) {
+        alert("Tanggal akhir drop harus lebih besar dari tanggal mulai");
+        return;
+      }
 
       const data = await res.json();
 
       if (!res.ok) {
+        console.error(data);
         alert(data.message || "Gagal menambahkan produk");
         return;
       }
@@ -166,14 +148,13 @@ export default function TambahProdukPage() {
       alert("Produk berhasil ditambahkan");
       router.push("/dashboardseller");
     } catch (err) {
-      console.error(err);
+      console.error("SUBMIT ERROR:", err);
       alert("Terjadi kesalahan server");
     } finally {
       setLoading(false);
     }
   };
 
-  /* ================= UI ================= */
   return (
     <div className="min-h-screen flex bg-[#7A1F1F] text-white">
       {/* SIDEBAR */}
@@ -285,6 +266,29 @@ export default function TambahProdukPage() {
             required
             className="w-full px-3 py-2 rounded text-black"
           />
+          <div>
+            <label className="block mb-1 text-sm">Mulai Drop</label>
+            <input
+              type="datetime-local"
+              name="dropStart"
+              value={form.dropStart}
+              onChange={handleChange}
+              required
+              className="w-full px-3 py-2 rounded text-black"
+            />
+          </div>
+
+          <div>
+            <label className="block mb-1 text-sm">Akhir Drop</label>
+            <input
+              type="datetime-local"
+              name="dropEnd"
+              value={form.dropEnd}
+              onChange={handleChange}
+              required
+              className="w-full px-3 py-2 rounded text-black"
+            />
+          </div>
 
           <button
             type="submit"
