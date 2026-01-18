@@ -7,9 +7,10 @@ const BASE_URL = process.env.NEXT_PUBLIC_BACKEND_URL;
 const BACKEND_TOKEN = process.env.NEXT_PUBLIC_BACKEND_TOKEN;
 
 // 🔹 UPLOADER CONFIG (SESUIAI SPEC KAMU)
-const UPLOAD_BASE = "https://api.danafxc.my.id";
-const UPLOAD_ENDPOINT = "/api/proxy/features/upload";
-const UPLOAD_APIKEY = "raflitrihanafi";
+const UPLOAD_BASE = process.env.UPLOAD_BASE;
+const UPLOAD_ENDPOINT = process.env.UPLOAD_ENDPOINT;
+const UPLOAD_APIKEY = process.env.UPLOAD_APIKEY;
+
 
 export default function TambahProdukPage() {
   const router = useRouter();
