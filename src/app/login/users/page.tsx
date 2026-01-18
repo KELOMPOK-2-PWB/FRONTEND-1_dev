@@ -62,7 +62,7 @@ export default function LoginPage() {
         setMessage("Login berhasil! Mengalihkan...");
 
         if (role === "seller") {
-          router.push("/dashboard/seller");
+          router.push("/dashboardseller");
         } else if (role === "user" || role === "users") {
           router.push("/");
         }
