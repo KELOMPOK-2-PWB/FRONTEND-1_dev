@@ -7,15 +7,13 @@ import Cropper from "react-easy-crop";
 import { motion, AnimatePresence, Variants } from "framer-motion";
 import axios from "axios";
 
-// --- FIX BUILD ERROR: MANUAL TYPE DEFINITION ---
+// --- TYPE DEFINITIONS ---
 type Point = { x: number; y: number };
 type Area = { width: number; height: number; x: number; y: number };
 
-// --- KONFIGURASI API (DARI ENV) ---
+// --- KONFIGURASI API ---
 const BASE_URL = process.env.NEXT_PUBLIC_BACKEND_URL;
 const BACKEND_TOKEN = process.env.NEXT_PUBLIC_BACKEND_TOKEN;
-
-// Config Uploader
 const UPLOADER_BASE_URL = process.env.NEXT_PUBLIC_UPLOAD_BASE;
 const UPLOADER_API_KEY = process.env.NEXT_PUBLIC_UPLOAD_APIKEY;
 
@@ -28,7 +26,7 @@ const api = axios.create({
   },
 });
 
-// Helper untuk set token otomatis
+// Helper Auth Token
 const setAuthToken = (token: string | null) => {
   if (token) {
     api.defaults.headers.common["Authorization"] = `Bearer ${token}`;
@@ -38,7 +36,7 @@ const setAuthToken = (token: string | null) => {
 };
 
 // ============================================================================
-// 1. STRICT TYPES DEFINITION
+// 1. INTERFACES (LENGKAP)
 // ============================================================================
 
 interface Address {
@@ -75,9 +73,10 @@ interface AddressPayload {
   country?: string;
 }
 
-// --- UPDATED INTERFACES FOR ORDER HISTORY ---
+// --- Order & Review Interfaces ---
 interface ProductItem {
     _id: string;
+    id?: string;
     name: string;
     price: number;
     images: string[];
@@ -92,14 +91,6 @@ interface OrderItem {
     seller?: string;
 }
 
-interface ShippingAddressDetail {
-    street: string;
-    city: string;
-    province: string;
-    postalCode: string;
-    country: string;
-}
-
 interface OrderHistory {
     _id: string;
     uniqueCode: string;
@@ -108,13 +99,20 @@ interface OrderHistory {
     itemsPrice?: number;
     createdAt: string;
     items: OrderItem[];
-    shippingAddress?: ShippingAddressDetail;
     courier?: string;
     trackingNumber?: string;
     resiOrder?: string;
 }
 
-// Response dari Uploader External
+// Data untuk Modal Review
+interface ReviewData {
+    productId: string;
+    productName: string;
+    productImage: string;
+    orderId: string;
+}
+
+// Upload Response
 interface ExternalUploadResponse {
   status: boolean;
   result: {
@@ -126,6 +124,7 @@ interface ExternalUploadResponse {
   message?: string;
 }
 
+// Props Components
 interface TabProps {
   showModal: (
     type: "success" | "error" | "confirm",
@@ -187,7 +186,7 @@ const TABS: { key: TabKey; label: string }[] = [
 ];
 
 // ============================================================================
-// 3. KOMPONEN UI UTAMA
+// 3. KOMPONEN UI UTAMA (PARENT)
 // ============================================================================
 
 function CustomModal({ isOpen, type, title, message, onConfirm, onCancel }: ModalProps) {
@@ -248,7 +247,7 @@ export default function UserProfilePage() {
   const router = useRouter();
   const [activeTab, setActiveTab] = useState<TabKey>("profil");
   
-  // 🔥 FIX REFRESH: STATE UNTUK MENGECEK APAKAH AUTH SUDAH SIAP
+  // State untuk mencegah redirect sebelum token dicek
   const [isAuthChecked, setIsAuthChecked] = useState(false);
 
   const [modalConfig, setModalConfig] = useState<ModalProps>({
@@ -277,10 +276,10 @@ export default function UserProfilePage() {
     // Cek token saat komponen mount (Client Side)
     const token = localStorage.getItem("authToken");
     if (!token) {
-      router.replace("/login/users"); // Gunakan replace agar history bersih
+      router.replace("/login/users"); 
     } else {
-      setAuthToken(token); // Set token ke axios
-      setIsAuthChecked(true); // 🔥 TANDAI BAHWA AUTH SUDAH SIAP
+      setAuthToken(token); 
+      setIsAuthChecked(true); // Token siap, render halaman
     }
   }, [router]);
 
@@ -294,7 +293,7 @@ export default function UserProfilePage() {
     exit: { opacity: 0, x: 20, transition: { duration: 0.2, ease: "easeInOut" } },
   };
 
-  // 🔥 TAMPILKAN LOADING JIKA AUTH BELUM SIAP AGAR TIDAK KICK USER
+  // Loading Screen sebelum token dicek (Mencegah kick logout saat refresh)
   if (!isAuthChecked) {
     return (
       <div className="min-h-screen bg-[#4F0F0F] flex items-center justify-center text-white">
@@ -351,7 +350,8 @@ export default function UserProfilePage() {
               exit="exit"
               className="w-full"
             >
-              {activeTab === "pesanan" && <PesananTab />}
+              {activeTab === "pesanan" && <PesananTab showModal={showModal} />}
+              
               {activeTab === "alamat" && (
                 <AlamatTab showModal={showModal} closeModal={closeModal} />
               )}
@@ -374,141 +374,303 @@ export default function UserProfilePage() {
 }
 
 // ============================================================================
-// 4. TAB: PESANAN (UPDATED SESUAI JSON)
+// 4. TAB: PESANAN (RIWAYAT + KONFIRMASI + REVIEW MODAL)
 // ============================================================================
-function PesananTab() {
+function PesananTab({ showModal }: { showModal: TabProps["showModal"] }) {
   const [orders, setOrders] = useState<OrderHistory[]>([]);
   const [loading, setLoading] = useState(true);
+  const [processingId, setProcessingId] = useState<string | null>(null);
+
+  // --- STATE MODAL REVIEW ---
+  const [reviewModalOpen, setReviewModalOpen] = useState(false);
+  const [selectedProduct, setSelectedProduct] = useState<ReviewData | null>(null);
+  const [rating, setRating] = useState(5);
+  const [comment, setComment] = useState("");
+  const [submittingReview, setSubmittingReview] = useState(false);
 
   // Helper untuk Status Warna
   const getStatusBadge = (status: string) => {
     switch (status.toLowerCase()) {
-        case 'completed':
-        case 'selesai':
-            return "bg-green-900/50 text-green-300 border-green-700";
-        case 'waiting_verification':
-        case 'menunggu_verifikasi':
-            return "bg-yellow-900/50 text-yellow-300 border-yellow-700";
-        case 'cancelled':
-        case 'batal':
-            return "bg-red-900/50 text-red-300 border-red-700";
-        default:
-            return "bg-blue-900/50 text-blue-300 border-blue-700";
+      case 'completed':
+      case 'selesai':
+        return "bg-green-900/50 text-green-300 border-green-700";
+      case 'waiting_verification':
+      case 'menunggu_verifikasi':
+        return "bg-yellow-900/50 text-yellow-300 border-yellow-700";
+      case 'cancelled':
+      case 'batal':
+        return "bg-red-900/50 text-red-300 border-red-700";
+      case 'sent':
+      case 'dikirim':
+        return "bg-blue-900/50 text-blue-300 border-blue-700";
+      default:
+        return "bg-gray-800 text-gray-300 border-gray-600";
+    }
+  };
+
+  const fetchOrders = async () => {
+    setLoading(true);
+    try {
+      const response = await api.get("/api/orders/myOrder");
+      const data = response.data;
+      
+      if (data && Array.isArray(data.data)) {
+        setOrders(data.data);
+      } else if (Array.isArray(data)) {
+        setOrders(data);
+      }
+    } catch (error) {
+      console.error("Gagal mengambil riwayat pesanan:", error);
+    } finally {
+      setLoading(false);
     }
   };
 
   useEffect(() => {
-    const fetchOrders = async () => {
-        try {
-            const response = await api.get("/api/orders/myOrder"); 
-            const data = response.data;
-            
-            if (data && Array.isArray(data.data)) {
-                setOrders(data.data);
-            } else if (Array.isArray(data)) {
-                setOrders(data);
-            }
-        } catch (error) {
-            console.error("Gagal mengambil riwayat pesanan:", error);
-        } finally {
-            setLoading(false);
-        }
-    };
-
     fetchOrders();
   }, []);
 
+  // --- ACTION: TERIMA BARANG ---
+  const handleConfirmClick = (orderId: string) => {
+    showModal(
+      "confirm",
+      "Terima Barang?",
+      "Pastikan barang sudah Anda terima dengan kondisi baik. Tindakan ini akan menyelesaikan pesanan.",
+      () => processCompleteOrder(orderId)
+    );
+  };
+
+  const processCompleteOrder = async (orderId: string) => {
+    setProcessingId(orderId);
+    try {
+      const response = await api.put(`/api/orders/${orderId}/complete`);
+      
+      if (response.status >= 200 && response.status < 300) {
+        showModal(
+            "success", 
+            "Pesanan Selesai", 
+            response.data?.message || "Terima kasih! Pesanan telah diselesaikan.", 
+            () => {}
+        );
+        fetchOrders(); 
+      }
+    } catch (err) {
+      showModal("error", "Gagal", getErrorMessage(err), () => {});
+    } finally {
+      setProcessingId(null);
+    }
+  };
+
+  // --- ACTION: BUKA MODAL REVIEW ---
+  const openReviewModal = (productData: ReviewData) => {
+    setSelectedProduct(productData);
+    setRating(5);
+    setComment("");
+    setReviewModalOpen(true);
+  };
+
+  // --- ACTION: SUBMIT REVIEW ---
+  const handleSubmitReview = async () => {
+    if (!selectedProduct) return;
+    setSubmittingReview(true);
+
+    try {
+        // API POST REVIEW
+        await api.post(`/api/reviews/${selectedProduct.productId}`, {
+            rating: Number(rating),
+            comment: comment
+        });
+
+        setReviewModalOpen(false); // Tutup modal
+        showModal("success", "Terima Kasih!", "Ulasan Anda telah berhasil dikirim.", () => {});
+    } catch (e) {
+        showModal("error", "Gagal", getErrorMessage(e), () => {});
+    } finally {
+        setSubmittingReview(false);
+    }
+  };
+
   return (
-    <div>
-      <h2 className="text-2xl font-bold mb-6 border-b border-[#7a1f1f] pb-4 flex items-center gap-2 text-red-100">
-        Riwayat Pesanan
-      </h2>
-      <div className="w-full overflow-x-auto bg-[#2a0505] rounded-lg border border-[#3f0e0e]">
-        <table className="w-full text-left text-sm">
-          <thead className="bg-[#3f0e0e] text-red-200 font-bold uppercase tracking-wider">
-            <tr>
-              <th className="px-6 py-4">Produk & Info</th>
-              <th className="px-6 py-4">Tanggal</th>
-              <th className="px-6 py-4">Status</th>
-              <th className="px-6 py-4 text-right">Total</th>
-            </tr>
-          </thead>
-          <tbody className="divide-y divide-[#5c1010]">
-            {loading ? (
-                <tr>
-                    <td colSpan={4} className="px-6 py-12 text-center text-gray-400">
-                        <div className="flex justify-center items-center gap-2">
-                            <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
-                            Memuat pesanan...
-                        </div>
-                    </td>
-                </tr>
-            ) : orders.length > 0 ? (
-              orders.map((order) => {
-                const displayTotal = order.totalPrice > 0 
-                    ? order.totalPrice 
-                    : order.items.reduce((acc, item) => acc + (item.price * item.quantity), 0);
-
-                const resi = order.trackingNumber || order.resiOrder;
-                const firstItem = order.items[0];
-                const productName = firstItem?.product?.name || "Produk";
-                const productImage = firstItem?.product?.images?.[0] || null;
-                const otherItemsCount = order.items.length - 1;
-
-                return (
-                    <tr key={order._id} className="hover:bg-[#4a1212] transition-colors">
-                        <td className="px-6 py-4">
-                            <div className="flex items-center gap-3">
-                                {productImage && (
-                                    <div className="w-12 h-12 bg-black rounded-md overflow-hidden border border-[#5c1010] flex-shrink-0">
-                                        <img src={productImage} alt={productName} className="w-full h-full object-cover" />
-                                    </div>
-                                )}
-                                <div>
-                                    <div className="font-bold text-white text-sm">
-                                        {productName} 
-                                        {otherItemsCount > 0 && <span className="text-gray-400 text-xs font-normal"> (+{otherItemsCount} lainnya)</span>}
-                                    </div>
-                                    <div className="text-[11px] text-gray-400 font-mono mt-0.5">
-                                        {order.uniqueCode}
-                                    </div>
-                                    {order.status === 'completed' && resi && (
-                                        <div className="text-[10px] text-gray-300 mt-1 flex gap-2">
-                                            {order.courier && <span className="bg-[#3f0e0e] px-1 rounded">{order.courier}</span>}
-                                            <span className="font-mono text-yellow-500/80">Resi: {resi}</span>
-                                        </div>
-                                    )}
-                                </div>
-                            </div>
-                        </td>
-                        <td className="px-6 py-4 text-gray-300">{formatDate(order.createdAt)}</td>
-                        <td className="px-6 py-4">
-                            <span className={`px-3 py-1 rounded-full text-xs font-bold border ${getStatusBadge(order.status)}`}>
-                            {order.status.replace(/_/g, " ")}
-                            </span>
-                        </td>
-                        <td className="px-6 py-4 text-right font-bold text-[#E53935]">
-                            {formatRupiah(displayTotal)}
-                        </td>
-                    </tr>
-                );
-              })
-            ) : (
+    <>
+      <div>
+        <h2 className="text-2xl font-bold mb-6 border-b border-[#7a1f1f] pb-4 flex items-center gap-2 text-red-100">
+          Riwayat Pesanan
+        </h2>
+        <div className="w-full overflow-x-auto bg-[#2a0505] rounded-lg border border-[#3f0e0e]">
+          <table className="w-full text-left text-sm">
+            <thead className="bg-[#3f0e0e] text-red-200 font-bold uppercase tracking-wider">
               <tr>
-                <td colSpan={4} className="px-6 py-12 text-center text-gray-400 italic">
-                  Belum ada riwayat pesanan.
-                </td>
+                <th className="px-6 py-4">Produk & Info</th>
+                <th className="px-6 py-4">Status</th>
+                <th className="px-6 py-4 text-right">Total</th>
               </tr>
-            )}
-          </tbody>
-        </table>
+            </thead>
+            <tbody className="divide-y divide-[#5c1010]">
+              {loading && orders.length === 0 ? (
+                  <tr>
+                      <td colSpan={3} className="px-6 py-12 text-center text-gray-400">
+                          <div className="flex justify-center items-center gap-2">
+                              <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
+                              Memuat pesanan...
+                          </div>
+                      </td>
+                  </tr>
+              ) : orders.length > 0 ? (
+                orders.map((order) => {
+                  const displayTotal = order.totalPrice > 0 
+                      ? order.totalPrice 
+                      : order.items.reduce((acc, item) => acc + (item.price * item.quantity), 0);
+
+                  const resi = order.trackingNumber || order.resiOrder;
+                  const firstItem = order.items[0];
+                  const productName = firstItem?.product?.name || "Produk";
+                  const productImage = firstItem?.product?.images?.[0] || null;
+                  const productId = firstItem?.product?._id || firstItem?.product?.id; 
+                  
+                  const isSent = order.status.toLowerCase() === "sent";
+                  const isCompleted = order.status.toLowerCase() === "completed" || order.status.toLowerCase() === "selesai";
+
+                  // Data untuk modal review
+                  const reviewData: ReviewData = {
+                      productId: productId || "",
+                      productName: productName,
+                      productImage: productImage || "",
+                      orderId: order._id
+                  };
+
+                  return (
+                      <tr key={order._id} className="hover:bg-[#4a1212] transition-colors">
+                          <td className="px-6 py-4">
+                              <div className="flex items-center gap-3">
+                                  {productImage && (
+                                      <div className="w-12 h-12 bg-black rounded-md overflow-hidden border border-[#5c1010] flex-shrink-0">
+                                          <img src={productImage} alt={productName} className="w-full h-full object-cover" />
+                                      </div>
+                                  )}
+                                  <div>
+                                      <div className="font-bold text-white text-sm">
+                                          {productName} 
+                                      </div>
+                                      <div className="text-[11px] text-gray-400 font-mono mt-0.5">
+                                          {order.uniqueCode}
+                                      </div>
+                                      {resi && (
+                                          <div className="text-[10px] text-gray-300 mt-1 flex gap-2">
+                                              {order.courier && <span className="bg-[#3f0e0e] px-1 rounded">{order.courier}</span>}
+                                              <span className="font-mono text-yellow-500/80">Resi: {resi}</span>
+                                          </div>
+                                      )}
+                                  </div>
+                              </div>
+                          </td>
+                          <td className="px-6 py-4">
+                              <div className="flex flex-col items-start gap-2">
+                                  <span className={`px-2 py-1 rounded text-xs font-bold border ${getStatusBadge(order.status)}`}>
+                                  {order.status.replace(/_/g, " ")}
+                                  </span>
+                                  
+                                  {/* Tombol Terima Barang */}
+                                  {isSent && (
+                                      <button 
+                                          onClick={() => handleConfirmClick(order._id)}
+                                          disabled={processingId === order._id}
+                                          className="bg-green-600 hover:bg-green-700 text-white text-[10px] font-bold px-3 py-1 rounded shadow-lg flex items-center gap-1 transition-all"
+                                      >
+                                          {processingId === order._id ? (
+                                              <>
+                                                  <div className="w-2 h-2 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
+                                                  Proses...
+                                              </>
+                                          ) : (
+                                              "Diterima?"
+                                          )}
+                                      </button>
+                                  )}
+
+                                  {/* Tombol Review (Muncul Modal) */}
+                                  {isCompleted && productId && (
+                                      <button 
+                                          onClick={() => openReviewModal(reviewData)}
+                                          className="bg-yellow-600 hover:bg-yellow-700 text-white text-[10px] font-bold px-3 py-1 rounded shadow-lg flex items-center gap-1 transition-all"
+                                      >
+                                          ★ Beri Ulasan
+                                      </button>
+                                  )}
+                              </div>
+                          </td>
+                          <td className="px-6 py-4 text-right font-bold text-[#E53935]">
+                              {formatRupiah(displayTotal)}
+                          </td>
+                      </tr>
+                  );
+                })
+              ) : (
+                <tr>
+                  <td colSpan={3} className="px-6 py-12 text-center text-gray-400 italic">
+                    Belum ada riwayat pesanan.
+                  </td>
+                </tr>
+              )}
+            </tbody>
+          </table>
+        </div>
       </div>
-    </div>
+
+      {/* 🔥 MODAL REVIEW (POPUP) 🔥 */}
+      {reviewModalOpen && selectedProduct && (
+        <div className="fixed inset-0 z-[200] flex items-center justify-center p-4">
+            <div className="absolute inset-0 bg-black/90 backdrop-blur-sm" onClick={() => setReviewModalOpen(false)}></div>
+            
+            <div className="bg-[#1E1E1E] w-full max-w-md rounded-xl border border-[#5c1010] p-6 relative z-10 animate-fadeIn shadow-2xl">
+                <button 
+                    onClick={() => setReviewModalOpen(false)}
+                    className="absolute top-4 right-4 text-gray-400 hover:text-white"
+                >✕</button>
+                
+                <div className="text-center mb-6">
+                    <h3 className="text-xl font-bold text-white mb-1">Beri Ulasan</h3>
+                    <p className="text-xs text-gray-400">untuk {selectedProduct.productName}</p>
+                </div>
+
+                <div className="flex justify-center gap-2 mb-6">
+                    {[1, 2, 3, 4, 5].map((star) => (
+                        <button 
+                            key={star} 
+                            onClick={() => setRating(star)} 
+                            className={`text-3xl transition transform hover:scale-110 ${star <= rating ? "text-yellow-400" : "text-gray-600"}`}
+                        >
+                            ★
+                        </button>
+                    ))}
+                </div>
+
+                <div className="mb-6">
+                    <textarea 
+                        rows={3} 
+                        className="w-full bg-[#2a0505] border border-[#5c1010] rounded-lg p-3 text-white focus:border-[#E53935] outline-none placeholder-gray-500"
+                        placeholder="Tulis pendapat Anda tentang produk ini..."
+                        value={comment}
+                        onChange={(e) => setComment(e.target.value)}
+                    />
+                </div>
+
+                <button 
+                    onClick={handleSubmitReview}
+                    disabled={submittingReview}
+                    className="w-full bg-[#E53935] hover:bg-[#d32f2f] text-white font-bold py-3 rounded-lg shadow-lg disabled:opacity-50 disabled:cursor-not-allowed flex justify-center items-center gap-2"
+                >
+                    {submittingReview && <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin"></div>}
+                    {submittingReview ? "Mengirim..." : "Kirim Ulasan"}
+                </button>
+            </div>
+        </div>
+      )}
+    </>
   );
 }
 
 // ============================================================================
-// 5. TAB: ALAMAT
+// 5. TAB: ALAMAT (FULL CODE RESTORED)
 // ============================================================================
 function AlamatTab({ showModal, closeModal }: TabProps) {
   const [alamatList, setAlamatList] = useState<Address[]>([]);
@@ -721,7 +883,7 @@ function AlamatTab({ showModal, closeModal }: TabProps) {
 }
 
 // ============================================================================
-// 6. TAB: PROFIL
+// 6. TAB: PROFIL (FULL CODE RESTORED)
 // ============================================================================
 function ProfilTab({ onSwitchToPassword, showModal, closeModal }: TabProps) {
   const router = useRouter();
@@ -750,7 +912,7 @@ function ProfilTab({ onSwitchToPassword, showModal, closeModal }: TabProps) {
   const [croppedAreaPixels, setCroppedAreaPixels] = useState<Area | null>(null);
   const [showCropper, setShowCropper] = useState(false);
 
-  // --- FETCH PROFILE (AXIOS) ---
+  // --- FETCH PROFILE ---
   const fetchProfile = async () => {
     try {
       const response = await api.get<UserProfile>("/api/users/profile");
@@ -899,7 +1061,7 @@ function ProfilTab({ onSwitchToPassword, showModal, closeModal }: TabProps) {
     }
   };
 
-  // --- 🔥 UPLOADER EXTERNAL LOGIC (AXIOS) ---
+  // --- 🔥 UPLOADER EXTERNAL LOGIC ---
   const handleSaveCrop = async () => {
     if (!cropImageSrc || !croppedAreaPixels) return;
     setUploading(true);
@@ -925,7 +1087,7 @@ function ProfilTab({ onSwitchToPassword, showModal, closeModal }: TabProps) {
 
       const externalData = uploadRes.data;
 
-      // Logic parsing url dari response uploader (sesuaikan jika perlu)
+      // Logic parsing url dari response uploader
       const newUrl = externalData.result?.url || (externalData as any).url;
 
       if (!newUrl) {
@@ -1005,7 +1167,6 @@ function ProfilTab({ onSwitchToPassword, showModal, closeModal }: TabProps) {
                 <button onClick={handleUpdateProfile} className="w-full bg-[#E53935] hover:bg-[#d32f2f] text-white font-bold py-3 rounded-lg">Simpan</button>
               </>
             )}
-            {/* Modal bagian lain (username, hp, email, delete) serupa strukturnya */}
             {modalType === "username" && (
               <>
                 <h4 className="text-xl font-bold mb-4">Ubah Username</h4>
@@ -1088,6 +1249,9 @@ function RowData({ label, value, onEdit }: RowDataProps) {
   );
 }
 
+// ============================================================================
+// 7. TAB: PASSWORD
+// ============================================================================
 function PasswordTab({ showModal, closeModal }: { showModal: TabProps["showModal"], closeModal: TabProps["closeModal"] }) {
   const [formPw, setFormPw] = useState({ currentPassword: "", newPassword: "", confirmPassword: "" });
   const [loading, setLoading] = useState(false);
