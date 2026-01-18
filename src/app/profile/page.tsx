@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import Navbar from "../../component/Element/Navbar";
 import Cropper from "react-easy-crop";
 import { motion, AnimatePresence, Variants } from "framer-motion";
+import axios from "axios";
 
 // --- FIX BUILD ERROR: MANUAL TYPE DEFINITION ---
 type Point = { x: number; y: number };
@@ -14,9 +15,27 @@ type Area = { width: number; height: number; x: number; y: number };
 const BASE_URL = process.env.NEXT_PUBLIC_BACKEND_URL;
 const BACKEND_TOKEN = process.env.NEXT_PUBLIC_BACKEND_TOKEN;
 
-const UPLOADER_BASE = process.env.NEXT_PUBLIC_UPLOAD_BASE; 
-const UPLOADER_APIKEY = process.env.NEXT_PUBLIC_UPLOAD_APIKEY;
+// Config Uploader
+const UPLOADER_BASE_URL = process.env.NEXT_PUBLIC_UPLOAD_BASE;
+const UPLOADER_API_KEY = process.env.NEXT_PUBLIC_UPLOAD_APIKEY;
 
+// --- AXIOS INSTANCE ---
+const api = axios.create({
+  baseURL: BASE_URL,
+  headers: {
+    "Content-Type": "application/json",
+    "x-api-key": BACKEND_TOKEN || "",
+  },
+});
+
+// Helper untuk set token otomatis
+const setAuthToken = (token: string | null) => {
+  if (token) {
+    api.defaults.headers.common["Authorization"] = `Bearer ${token}`;
+  } else {
+    delete api.defaults.headers.common["Authorization"];
+  }
+};
 
 // ============================================================================
 // 1. STRICT TYPES DEFINITION
@@ -56,15 +75,55 @@ interface AddressPayload {
   country?: string;
 }
 
-interface BackendError {
-  message?: string;
-  error?: string;
+// --- UPDATED INTERFACES FOR ORDER HISTORY ---
+interface ProductItem {
+    _id: string;
+    name: string;
+    price: number;
+    images: string[];
+    dropStatus?: string;
+}
+
+interface OrderItem {
+    _id: string;
+    product: ProductItem;
+    quantity: number;
+    price: number;
+    seller?: string;
+}
+
+interface ShippingAddressDetail {
+    street: string;
+    city: string;
+    province: string;
+    postalCode: string;
+    country: string;
+}
+
+interface OrderHistory {
+    _id: string;
+    uniqueCode: string;
+    status: string;
+    totalPrice: number;
+    itemsPrice?: number;
+    createdAt: string;
+    items: OrderItem[];
+    shippingAddress?: ShippingAddressDetail;
+    courier?: string;
+    trackingNumber?: string;
+    resiOrder?: string;
 }
 
 // Response dari Uploader External
 interface ExternalUploadResponse {
-  message: string;
-  url: string;
+  status: boolean;
+  result: {
+    url: string;
+    filename: string;
+    mimetype: string;
+    size: number;
+  };
+  message?: string;
 }
 
 interface TabProps {
@@ -95,83 +154,29 @@ interface RowDataProps {
 }
 
 // ============================================================================
-// 2. HELPER FUNCTIONS & STRICT FETCH
+// 2. HELPER FUNCTIONS
 // ============================================================================
 
 function getErrorMessage(error: unknown): string {
-  if (error instanceof Error) return error.message;
-  if (typeof error === "string") return error;
-  if (typeof error === "object" && error !== null && "message" in error) {
-    return String((error as { message: unknown }).message);
+  if (axios.isAxiosError(error)) {
+    return error.response?.data?.message || error.response?.data?.error || error.message;
   }
+  if (error instanceof Error) return error.message;
   return "Terjadi kesalahan yang tidak diketahui";
 }
 
-// Fix URL Protocol (HTTPS)
-function formatUrl(endpoint: string, base: string | undefined): string {
-  let baseUrl = (base || "").trim();
-  
-  if (!baseUrl) return endpoint;
-  if (!baseUrl.startsWith("http")) {
-    baseUrl = `https://${baseUrl}`;
-  }
-  if (baseUrl.endsWith("/")) {
-    baseUrl = baseUrl.slice(0, -1);
-  }
-  // Jika endpoint sudah lengkap (http...), kembalikan langsung
-  if (endpoint.startsWith("http")) return endpoint;
+const formatRupiah = (num: number) => {
+    return new Intl.NumberFormat("id-ID", {
+      style: "currency",
+      currency: "IDR",
+      maximumFractionDigits: 0,
+    }).format(num);
+};
 
-  const cleanEndpoint = endpoint.startsWith("/") ? endpoint : `/${endpoint}`;
-  return `${baseUrl}${cleanEndpoint}`;
-}
-
-// Fetch Wrapper Strictly Typed (Untuk Backend App Utama)
-async function fetchAPI<T>(
-  endpoint: string,
-  method: string,
-  body?: unknown,
-  token?: string
-): Promise<{ ok: boolean; status: number; data: T | null }> {
-  const headers: Record<string, string> = {
-    "Content-Type": "application/json",
-    "x-api-key": (BACKEND_TOKEN as string) || "",
-  };
-  if (token) headers["Authorization"] = `Bearer ${token}`;
-
-  const fullUrl = formatUrl(endpoint, BASE_URL);
-
-  try {
-    const res = await fetch(fullUrl, {
-      method,
-      headers,
-      body: body ? JSON.stringify(body) : undefined,
-    });
-
-    const text = await res.text();
-    let data: unknown = null;
-
-    if (text.trim().startsWith("<")) {
-      console.error(`❌ HTML Error dari ${fullUrl}`);
-      throw new Error(`Server Error (${res.status}): Backend error.`);
-    }
-
-    try {
-      data = text ? JSON.parse(text) : null;
-    } catch {
-      throw new Error("Format respon server tidak valid (bukan JSON).");
-    }
-
-    if (!res.ok) {
-      const errObj = data as BackendError;
-      const msg = errObj?.message || errObj?.error || `Request gagal (${res.status})`;
-      throw new Error(msg);
-    }
-
-    return { ok: res.ok, status: res.status, data: data as T };
-  } catch (error) {
-    throw new Error(getErrorMessage(error));
-  }
-}
+const formatDate = (dateString: string) => {
+    const options: Intl.DateTimeFormatOptions = { day: 'numeric', month: 'short', year: 'numeric' };
+    return new Date(dateString).toLocaleDateString('id-ID', options);
+};
 
 type TabKey = "profil" | "pesanan" | "alamat" | "password";
 const TABS: { key: TabKey; label: string }[] = [
@@ -242,6 +247,9 @@ function CustomModal({ isOpen, type, title, message, onConfirm, onCancel }: Moda
 export default function UserProfilePage() {
   const router = useRouter();
   const [activeTab, setActiveTab] = useState<TabKey>("profil");
+  
+  // 🔥 FIX REFRESH: STATE UNTUK MENGECEK APAKAH AUTH SUDAH SIAP
+  const [isAuthChecked, setIsAuthChecked] = useState(false);
 
   const [modalConfig, setModalConfig] = useState<ModalProps>({
     isOpen: false,
@@ -266,9 +274,13 @@ export default function UserProfilePage() {
   };
 
   useEffect(() => {
+    // Cek token saat komponen mount (Client Side)
     const token = localStorage.getItem("authToken");
     if (!token) {
-      router.push("/login/users");
+      router.replace("/login/users"); // Gunakan replace agar history bersih
+    } else {
+      setAuthToken(token); // Set token ke axios
+      setIsAuthChecked(true); // 🔥 TANDAI BAHWA AUTH SUDAH SIAP
     }
   }, [router]);
 
@@ -281,6 +293,18 @@ export default function UserProfilePage() {
     visible: { opacity: 1, x: 0, transition: { duration: 0.3, ease: "easeInOut" } },
     exit: { opacity: 0, x: 20, transition: { duration: 0.2, ease: "easeInOut" } },
   };
+
+  // 🔥 TAMPILKAN LOADING JIKA AUTH BELUM SIAP AGAR TIDAK KICK USER
+  if (!isAuthChecked) {
+    return (
+      <div className="min-h-screen bg-[#4F0F0F] flex items-center justify-center text-white">
+        <div className="flex flex-col items-center gap-3">
+            <div className="w-8 h-8 border-4 border-red-500 border-t-transparent rounded-full animate-spin"></div>
+            <p className="text-sm font-mono text-red-200">Memuat Profil...</p>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="min-h-screen bg-[#4F0F0F] font-sans text-white pb-20">
@@ -350,13 +374,49 @@ export default function UserProfilePage() {
 }
 
 // ============================================================================
-// 4. TAB: PESANAN
+// 4. TAB: PESANAN (UPDATED SESUAI JSON)
 // ============================================================================
 function PesananTab() {
-  const orders = [
-    { id: "ORD-8821", date: "12 Nov 2023", status: "Selesai", price: 150000 },
-    { id: "ORD-9932", date: "15 Nov 2023", status: "Dikirim", price: 75000 },
-  ];
+  const [orders, setOrders] = useState<OrderHistory[]>([]);
+  const [loading, setLoading] = useState(true);
+
+  // Helper untuk Status Warna
+  const getStatusBadge = (status: string) => {
+    switch (status.toLowerCase()) {
+        case 'completed':
+        case 'selesai':
+            return "bg-green-900/50 text-green-300 border-green-700";
+        case 'waiting_verification':
+        case 'menunggu_verifikasi':
+            return "bg-yellow-900/50 text-yellow-300 border-yellow-700";
+        case 'cancelled':
+        case 'batal':
+            return "bg-red-900/50 text-red-300 border-red-700";
+        default:
+            return "bg-blue-900/50 text-blue-300 border-blue-700";
+    }
+  };
+
+  useEffect(() => {
+    const fetchOrders = async () => {
+        try {
+            const response = await api.get("/api/orders/myOrder"); 
+            const data = response.data;
+            
+            if (data && Array.isArray(data.data)) {
+                setOrders(data.data);
+            } else if (Array.isArray(data)) {
+                setOrders(data);
+            }
+        } catch (error) {
+            console.error("Gagal mengambil riwayat pesanan:", error);
+        } finally {
+            setLoading(false);
+        }
+    };
+
+    fetchOrders();
+  }, []);
 
   return (
     <div>
@@ -367,33 +427,72 @@ function PesananTab() {
         <table className="w-full text-left text-sm">
           <thead className="bg-[#3f0e0e] text-red-200 font-bold uppercase tracking-wider">
             <tr>
-              <th className="px-6 py-4">ID Pesanan</th>
+              <th className="px-6 py-4">Produk & Info</th>
               <th className="px-6 py-4">Tanggal</th>
               <th className="px-6 py-4">Status</th>
               <th className="px-6 py-4 text-right">Total</th>
             </tr>
           </thead>
           <tbody className="divide-y divide-[#5c1010]">
-            {orders.length > 0 ? (
-              orders.map((order) => (
-                <tr key={order.id} className="hover:bg-[#4a1212] transition-colors">
-                  <td className="px-6 py-4 font-mono text-white font-bold">{order.id}</td>
-                  <td className="px-6 py-4 text-gray-300">{order.date}</td>
-                  <td className="px-6 py-4">
-                    <span className={`px-3 py-1 rounded-full text-xs font-bold ${
-                        order.status === "Selesai"
-                          ? "bg-green-900/50 text-green-300 border border-green-700"
-                          : "bg-blue-900/50 text-blue-300 border border-blue-700"
-                      }`}
-                    >
-                      {order.status}
-                    </span>
-                  </td>
-                  <td className="px-6 py-4 text-right font-bold text-[#E53935]">
-                    Rp {order.price.toLocaleString()}
-                  </td>
+            {loading ? (
+                <tr>
+                    <td colSpan={4} className="px-6 py-12 text-center text-gray-400">
+                        <div className="flex justify-center items-center gap-2">
+                            <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
+                            Memuat pesanan...
+                        </div>
+                    </td>
                 </tr>
-              ))
+            ) : orders.length > 0 ? (
+              orders.map((order) => {
+                const displayTotal = order.totalPrice > 0 
+                    ? order.totalPrice 
+                    : order.items.reduce((acc, item) => acc + (item.price * item.quantity), 0);
+
+                const resi = order.trackingNumber || order.resiOrder;
+                const firstItem = order.items[0];
+                const productName = firstItem?.product?.name || "Produk";
+                const productImage = firstItem?.product?.images?.[0] || null;
+                const otherItemsCount = order.items.length - 1;
+
+                return (
+                    <tr key={order._id} className="hover:bg-[#4a1212] transition-colors">
+                        <td className="px-6 py-4">
+                            <div className="flex items-center gap-3">
+                                {productImage && (
+                                    <div className="w-12 h-12 bg-black rounded-md overflow-hidden border border-[#5c1010] flex-shrink-0">
+                                        <img src={productImage} alt={productName} className="w-full h-full object-cover" />
+                                    </div>
+                                )}
+                                <div>
+                                    <div className="font-bold text-white text-sm">
+                                        {productName} 
+                                        {otherItemsCount > 0 && <span className="text-gray-400 text-xs font-normal"> (+{otherItemsCount} lainnya)</span>}
+                                    </div>
+                                    <div className="text-[11px] text-gray-400 font-mono mt-0.5">
+                                        {order.uniqueCode}
+                                    </div>
+                                    {order.status === 'completed' && resi && (
+                                        <div className="text-[10px] text-gray-300 mt-1 flex gap-2">
+                                            {order.courier && <span className="bg-[#3f0e0e] px-1 rounded">{order.courier}</span>}
+                                            <span className="font-mono text-yellow-500/80">Resi: {resi}</span>
+                                        </div>
+                                    )}
+                                </div>
+                            </div>
+                        </td>
+                        <td className="px-6 py-4 text-gray-300">{formatDate(order.createdAt)}</td>
+                        <td className="px-6 py-4">
+                            <span className={`px-3 py-1 rounded-full text-xs font-bold border ${getStatusBadge(order.status)}`}>
+                            {order.status.replace(/_/g, " ")}
+                            </span>
+                        </td>
+                        <td className="px-6 py-4 text-right font-bold text-[#E53935]">
+                            {formatRupiah(displayTotal)}
+                        </td>
+                    </tr>
+                );
+              })
             ) : (
               <tr>
                 <td colSpan={4} className="px-6 py-12 text-center text-gray-400 italic">
@@ -428,22 +527,16 @@ function AlamatTab({ showModal, closeModal }: TabProps) {
   });
 
   const fetchAlamat = async () => {
-    const token = localStorage.getItem("authToken");
-    if (!token) return;
     try {
-      const { data, ok } = await fetchAPI<Address[] | { data: Address[] }>(
-        "/api/users/address",
-        "GET",
-        null,
-        token
-      );
+      const response = await api.get("/api/users/address");
+      const data = response.data;
 
-      if (ok && data) {
+      if (data) {
         let list: Address[] = [];
         if (Array.isArray(data)) {
           list = data;
-        } else if ('data' in data && Array.isArray(data.data)) {
-          list = data.data;
+        } else if ((data as any).data && Array.isArray((data as any).data)) {
+          list = (data as any).data;
         }
         setAlamatList(list);
       }
@@ -457,13 +550,11 @@ function AlamatTab({ showModal, closeModal }: TabProps) {
   }, []);
 
   const handleSubmit = async () => {
-    const token = localStorage.getItem("authToken");
-    if (!token) return;
     setLoading(true);
 
     try {
       const url = editMode ? `/api/users/address/${editMode}` : "/api/users/address";
-      const method = editMode ? "PUT" : "POST";
+      const method = editMode ? "put" : "post";
 
       const payload: AddressPayload = {
         street: formAddr.street,
@@ -475,9 +566,9 @@ function AlamatTab({ showModal, closeModal }: TabProps) {
         country: formAddr.country || "Indonesia",
       };
 
-      const { ok } = await fetchAPI<Address>(url, method, payload, token);
+      const response = await (api as any)[method](url, payload);
 
-      if (ok) {
+      if (response.status >= 200 && response.status < 300) {
         showModal(
           "success",
           "Berhasil",
@@ -521,11 +612,9 @@ function AlamatTab({ showModal, closeModal }: TabProps) {
   };
 
   const handleDeleteConfirm = async (id: string) => {
-    const token = localStorage.getItem("authToken");
-    if (!token) return;
     try {
-      const { ok } = await fetchAPI<{ message: string }>(`/api/users/address/${id}`, "DELETE", null, token);
-      if (ok) {
+      const response = await api.delete(`/api/users/address/${id}`);
+      if (response.status >= 200 && response.status < 300) {
         fetchAlamat();
         showModal("success", "Berhasil", "Alamat dihapus!", () => {});
       }
@@ -661,26 +750,13 @@ function ProfilTab({ onSwitchToPassword, showModal, closeModal }: TabProps) {
   const [croppedAreaPixels, setCroppedAreaPixels] = useState<Area | null>(null);
   const [showCropper, setShowCropper] = useState(false);
 
-  // --- FETCH PROFILE (STRICT MAPPING) ---
+  // --- FETCH PROFILE (AXIOS) ---
   const fetchProfile = async () => {
-    const token = localStorage.getItem("authToken");
-    if (!token) return;
-
     try {
-      const { data, ok, status } = await fetchAPI<UserProfile>(
-        "/api/users/profile",
-        "GET",
-        null,
-        token
-      );
+      const response = await api.get<UserProfile>("/api/users/profile");
+      const data = response.data;
 
-      if (status === 401) {
-        localStorage.clear();
-        router.push("/login/users");
-        return;
-      }
-
-      if (ok && data) {
+      if (data) {
         const user = data;
 
         let validAvatar = user.avatar;
@@ -711,8 +787,13 @@ function ProfilTab({ onSwitchToPassword, showModal, closeModal }: TabProps) {
             setAvatarPreview(null);
         }
       }
-    } catch (e) {
-      console.error("Gagal mengambil data profil:", getErrorMessage(e));
+    } catch (e: any) {
+        if (e.response && (e.response.status === 401 || e.response.status === 403)) {
+            localStorage.removeItem("authToken");
+            router.push("/login/users");
+            return;
+        }
+        console.error("Gagal mengambil data profil:", getErrorMessage(e));
     }
   };
 
@@ -730,9 +811,6 @@ function ProfilTab({ onSwitchToPassword, showModal, closeModal }: TabProps) {
   };
 
   const handleUpdateProfile = async () => {
-    const token = localStorage.getItem("authToken");
-    if (!token) return;
-
     try {
       const body = {
         name: formData.name,
@@ -741,14 +819,9 @@ function ProfilTab({ onSwitchToPassword, showModal, closeModal }: TabProps) {
         avatar: avatarPreview || undefined,
       };
 
-      const { ok } = await fetchAPI<UserProfile>(
-        "/api/users/profile",
-        "PUT",
-        body,
-        token
-      );
+      const response = await api.put<UserProfile>("/api/users/profile", body);
 
-      if (ok) {
+      if (response.status >= 200 && response.status < 300) {
         setProfileData(prev => ({ ...prev, ...body, email: prev.email })); 
         showModal("success", "Berhasil", "Data profil berhasil disimpan!", () => {
            setModalType(null);
@@ -760,27 +833,21 @@ function ProfilTab({ onSwitchToPassword, showModal, closeModal }: TabProps) {
   };
 
   const handleDeleteAccount = async () => {
-    const token = localStorage.getItem("authToken");
-    if (!token) return;
-
     if (!deleteForm.email || !deleteForm.password) {
       showModal("error", "Peringatan", "Isi email dan password konfirmasi.", () => {});
       return;
     }
 
     try {
-      const { ok, data } = await fetchAPI<{ message: string }>(
-        "/api/users/profile",
-        "DELETE",
-        { email: deleteForm.email, password: deleteForm.password },
-        token
-      );
+      const response = await api.delete<{ message: string }>("/api/users/profile", {
+          data: { email: deleteForm.email, password: deleteForm.password }
+      });
 
-      if (ok) {
+      if (response.status >= 200 && response.status < 300) {
         showModal(
           "success",
           "Akun Dihapus",
-          data?.message || "Akun Anda telah berhasil dihapus.",
+          response.data?.message || "Akun Anda telah berhasil dihapus.",
           () => {
             localStorage.clear();
             router.push("/login/users");
@@ -793,19 +860,12 @@ function ProfilTab({ onSwitchToPassword, showModal, closeModal }: TabProps) {
   };
 
   const handleRequestEmail = async () => {
-    const token = localStorage.getItem("authToken");
-    if (!token) return;
     try {
-      const { ok, data } = await fetchAPI<{ message: string }>(
-        "/api/users/request-email-update",
-        "POST",
-        { newEmail },
-        token
-      );
+      const response = await api.post<{ message: string }>("/api/users/request-email-update", { newEmail });
 
-      if (ok) {
+      if (response.status >= 200 && response.status < 300) {
         setOtpSent(true);
-        showModal("success", "OTP Terkirim", data?.message || "Cek email Anda.", () => {});
+        showModal("success", "OTP Terkirim", response.data?.message || "Cek email Anda.", () => {});
       }
     } catch (e) {
       showModal("error", "Error", getErrorMessage(e), () => {});
@@ -813,17 +873,10 @@ function ProfilTab({ onSwitchToPassword, showModal, closeModal }: TabProps) {
   };
 
   const handleVerifyEmail = async () => {
-    const token = localStorage.getItem("authToken");
-    if (!token) return;
     try {
-      const { ok, data } = await fetchAPI<{ message: string }>(
-        "/api/users/verify-email-update",
-        "POST",
-        { otp: otpCode },
-        token
-      );
+      const response = await api.post<{ message: string }>("/api/users/verify-email-update", { otp: otpCode });
 
-      if (ok) {
+      if (response.status >= 200 && response.status < 300) {
         showModal("success", "Berhasil", "Email berhasil diubah!", () => {
           window.location.reload();
         });
@@ -846,7 +899,7 @@ function ProfilTab({ onSwitchToPassword, showModal, closeModal }: TabProps) {
     }
   };
 
-  // --- 🔥 PERBAIKAN: UPLOADER EXTERNAL LOGIC ---
+  // --- 🔥 UPLOADER EXTERNAL LOGIC (AXIOS) ---
   const handleSaveCrop = async () => {
     if (!cropImageSrc || !croppedAreaPixels) return;
     setUploading(true);
@@ -855,42 +908,34 @@ function ProfilTab({ onSwitchToPassword, showModal, closeModal }: TabProps) {
       const croppedImageBase64 = await getCroppedImg(cropImageSrc, croppedAreaPixels);
       if (!croppedImageBase64) throw new Error("Gagal crop gambar");
 
-      const token = localStorage.getItem("authToken");
       const file = dataURLtoFile(croppedImageBase64, "avatar.jpg");
       const formDataUpload = new FormData();
-      formDataUpload.append("image", file); // Key 'image' sesuai spec uploader
+      formDataUpload.append("image", file);
 
-      // Bangun URL Uploader Eksternal
-      const uploadUrl = new URL("/api/proxy/features/upload", UPLOADER_BASE);
-      uploadUrl.searchParams.append("apikey", UPLOADER_APIKEY as string); // Tambahkan params query apikey
-      
+      // Gunakan URL dari Env atau Hardcode
+      const uploadUrl = new URL(UPLOADER_BASE_URL || "");
+      if (UPLOADER_API_KEY) {
+        uploadUrl.searchParams.append("apikey", UPLOADER_API_KEY);
+      }
 
-      // Upload ke Uploader
-     const uploadRes = await fetch(uploadUrl.toString(), {
-       method: "POST",
-       body: formDataUpload,
-     });
+      // External Request using axios without interceptors
+      const uploadRes = await axios.post<ExternalUploadResponse>(uploadUrl.toString(), formDataUpload, {
+          headers: { "Content-Type": "multipart/form-data" }
+      });
 
-     const externalData: ExternalUploadResponse = await uploadRes.json();
-     console.log("UPLOAD RESPONSE:", externalData);
+      const externalData = uploadRes.data;
 
+      // Logic parsing url dari response uploader (sesuaikan jika perlu)
+      const newUrl = externalData.result?.url || (externalData as any).url;
 
-     if (!externalData.url) {
-       throw new Error(externalData.message || "Upload gagal");
-     }
+      if (!newUrl) {
+          throw new Error(externalData.message || "Gagal upload gambar.");
+      }
 
-     const newUrl = externalData.url;
+      const updateRes = await api.put<UserProfile>("/api/users/profile", { avatar: newUrl });
 
-      // Update URL gambar ke Backend App Utama
-      const updateRes = await fetchAPI<UserProfile>(
-        "/api/users/profile",
-        "PUT",
-        { avatar: newUrl }, // Kirim URL hasil upload
-        token || ""
-      );
-
-      if (updateRes.ok) {
-          setAvatarPreview(newUrl);
+      if (updateRes.status >= 200 && updateRes.status < 300) {
+           setAvatarPreview(newUrl);
           localStorage.setItem("my_custom_avatar", newUrl);
           setShowCropper(false);
           setCropImageSrc(null);
@@ -902,12 +947,6 @@ function ProfilTab({ onSwitchToPassword, showModal, closeModal }: TabProps) {
               () => {},
             );
           }, 150);
-          // showModal(
-          //   "success",
-          //   "Berhasil",
-          //   "Foto profil berhasil diperbarui!",
-          //   () => setShowCropper(false)
-          // );
       }
     } catch (e: unknown) {
       showModal("error", "Gagal", getErrorMessage(e), () => {});
@@ -915,10 +954,6 @@ function ProfilTab({ onSwitchToPassword, showModal, closeModal }: TabProps) {
       setUploading(false);
     }
   };
-
-  useEffect(() => {
-    console.log("uploading:", uploading);
-  }, [uploading]);
 
   return (
     <div className="grid md:grid-cols-[280px,1fr] gap-12 relative">
@@ -1031,13 +1066,7 @@ function ProfilTab({ onSwitchToPassword, showModal, closeModal }: TabProps) {
               <input type="range" value={zoom} min={1} max={3} step={0.1} onChange={(e) => setZoom(Number(e.target.value))} className="w-full h-1 bg-gray-600 rounded-lg appearance-none cursor-pointer accent-[#E53935]" />
               <div className="flex gap-3 justify-end">
                 <button onClick={() => { setShowCropper(false); setCropImageSrc(null); }} className="px-4 py-2 text-gray-300 font-bold">Batal</button>
-                <button 
-  onClick={handleSaveCrop} 
-  disabled={uploading}    
-  className="px-6 py-2 bg-[#E53935] hover:bg-[#c62828] disabled:bg-gray-600 text-white rounded-lg font-bold transition-colors"
->
-  {uploading ? "Mengupload..." : "Simpan"}
-</button>
+                <button onClick={handleSaveCrop} disabled={uploading} className="px-6 py-2 bg-[#E53935] text-white rounded-lg font-bold">{uploading ? "..." : "Simpan"}</button>
               </div>
             </div>
           </div>
@@ -1070,20 +1099,16 @@ function PasswordTab({ showModal, closeModal }: { showModal: TabProps["showModal
       return;
     }
 
-    const token = localStorage.getItem("authToken");
-    if (!token) return;
     setLoading(true);
 
     try {
-      const { ok, data } = await fetchAPI<{ message: string }>(
-        "/api/users/change-password",
-        "PUT",
-        { currentPassword: formPw.currentPassword, newPassword: formPw.newPassword },
-        token
-      );
+      const response = await api.put<{ message: string }>("/api/users/change-password", {
+          currentPassword: formPw.currentPassword,
+          newPassword: formPw.newPassword
+      });
 
-      if (ok) {
-        showModal("success", "Berhasil", data?.message || "Password berhasil diubah!", () => {});
+      if (response.status >= 200 && response.status < 300) {
+        showModal("success", "Berhasil", response.data?.message || "Password berhasil diubah!", () => {});
         setFormPw({ currentPassword: "", newPassword: "", confirmPassword: "" });
       }
     } catch (e) {
@@ -1118,7 +1143,7 @@ const createImage = (url: string): Promise<HTMLImageElement> =>
     image.src = url;
   });
 
-async function getCroppedImg(imageSrc: string, pixelCrop: { x: number; y: number; width: number; height: number }): Promise<string | null> {
+async function getCroppedImg(imageSrc: string, pixelCrop: { x: number; y: number; width: number; height: number; }): Promise<string | null> {
   const image = await createImage(imageSrc);
   const canvas = document.createElement("canvas");
   const ctx = canvas.getContext("2d");

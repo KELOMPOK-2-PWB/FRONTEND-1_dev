@@ -3,7 +3,7 @@
 import React, { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import Navbar from "../../component/Element/Navbar";
-import axios, { AxiosError } from "axios";
+import axios from "axios";
 
 // --- KONFIGURASI API ---
 const BASE_URL = process.env.NEXT_PUBLIC_BACKEND_URL;
@@ -60,9 +60,11 @@ interface CheckoutPayload {
     city: string;
     province: string;
     postalCode: string;
+    country: string; // Tambahkan ini agar tidak dianggap incomplete
   };
   shippingCost: number;
   selectedProductIds: string[];
+  paymentMethod: string;
 }
 
 // ============================================================================
@@ -90,9 +92,11 @@ export default function CheckoutPage() {
   const [addresses, setAddresses] = useState<Address[]>([]);
   const [selectedAddressId, setSelectedAddressId] = useState<string>("");
   const [cartItems, setCartItems] = useState<CartItem[]>([]);
-  const [paymentMethod, setPaymentMethod] = useState("TRANSFER_BCA");
+  
+  // 🔥 Default Payment langsung QRIS
+  const [paymentMethod, setPaymentMethod] = useState("QRIS");
 
-  const SHIPPING_COST = 22000; // Hardcode dulu sesuai contoh API
+  const SHIPPING_COST = 10000;
 
   // Load Data
   useEffect(() => {
@@ -111,20 +115,37 @@ export default function CheckoutPage() {
       const addrRes = await api.get("/api/users/address");
       const addrData = addrRes.data;
       
-      // Handle format response yg mungkin beda (array langsung atau object data)
-      const listAddress = Array.isArray(addrData) ? addrData : (addrData as any).data || [];
+      let listAddress: Address[] = [];
+      if (Array.isArray(addrData)) {
+        listAddress = addrData;
+      } else if (addrData && Array.isArray((addrData as any).data)) {
+        listAddress = (addrData as any).data;
+      }
       setAddresses(listAddress);
 
-      // Otomatis pilih alamat default atau yang pertama
-      const defaultAddr = listAddress.find((a: Address) => a.isDefaultAddress);
+      // Auto select default address
+      const defaultAddr = listAddress.find((a) => a.isDefaultAddress);
       if (defaultAddr) setSelectedAddressId(defaultAddr._id);
       else if (listAddress.length > 0) setSelectedAddressId(listAddress[0]._id);
 
       // 2. Ambil Keranjang
       const cartRes = await api.get("/api/cart");
       const cartData = cartRes.data;
-      const items = (cartData as any).data?.items || [];
-      setCartItems(items);
+      
+      let items: CartItem[] = [];
+      if (cartData) {
+        if (Array.isArray(cartData.items)) {
+            items = cartData.items;
+        } else if (cartData.data && Array.isArray(cartData.data.items)) {
+            items = cartData.data.items;
+        } else if (Array.isArray(cartData)) {
+             items = cartData as any;
+        }
+      }
+
+      // Validasi item agar tidak null
+      const validItems = items.filter(item => item && item.product && item.product._id);
+      setCartItems(validItems);
 
     } catch (error) {
       console.error("Error loading checkout data", error);
@@ -138,7 +159,7 @@ export default function CheckoutPage() {
   const grandTotal = subTotal + SHIPPING_COST;
   const selectedAddress = addresses.find(a => a._id === selectedAddressId);
 
-  // Handle Checkout Action
+  // --- 🔥 HANDLE CHECKOUT (UPDATED) ---
   const handlePay = async () => {
     if (!selectedAddress) {
       alert("Harap pilih alamat pengiriman!");
@@ -156,21 +177,37 @@ export default function CheckoutPage() {
         street: selectedAddress.street,
         city: selectedAddress.city,
         province: selectedAddress.province,
-        postalCode: selectedAddress.postalCode
+        postalCode: selectedAddress.postalCode,
+        country: selectedAddress.country || "Indonesia"
       },
       shippingCost: SHIPPING_COST,
-      selectedProductIds: cartItems.map(item => item.product._id)
+      selectedProductIds: cartItems.map(item => item.product._id),
+      paymentMethod: "QRIS"
     };
 
     try {
-      // POST ke /api/orders/checkout sesuai Gambar 1
       const response = await api.post("/api/orders/checkout", payload);
 
       if (response.status >= 200 && response.status < 300) {
-        alert(`Checkout Berhasil!\nKode Unik: ${response.data.uniqueCode}`);
-        router.push("/profile?tab=pesanan"); // Redirect ke history pesanan
+        // Ambil orderId
+        const orderId = 
+            response.data.orderId || 
+            response.data.data?.orderId || 
+            response.data.result?.orderId ||
+            (response.data.data && response.data.data._id); 
+        
+        if (orderId) {
+            // 🔥 SIMPAN ID KE LOCAL STORAGE
+            localStorage.setItem("current_order_id", orderId);
+            
+            // REDIRECT KE HALAMAN PAYMENT (TANPA ID DI URL)
+            router.push("/payment");
+        } else {
+            alert("Gagal mendapatkan Order ID.");
+        }
       }
     } catch (error: any) {
+      console.error("Checkout Error:", error);
       const msg = error.response?.data?.message || "Gagal melakukan checkout.";
       alert("Gagal: " + msg);
     } finally {
@@ -193,7 +230,6 @@ export default function CheckoutPage() {
       <main className="max-w-7xl mx-auto px-4 pt-[100px]">
         <h1 className="text-3xl font-bold mb-8 pl-2 border-l-4 border-white">Checkout</h1>
 
-        {/* LAYOUT GRID (Kiri: Alamat & Barang, Kanan: Pembayaran & Ringkasan) */}
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
           
           {/* --- KOLOM KIRI (Span 2) --- */}
@@ -227,7 +263,7 @@ export default function CheckoutPage() {
                       <p className="font-bold text-white mb-1">{selectedAddress.street}</p>
                       <p>{selectedAddress.city}, {selectedAddress.province}</p>
                       <p>{selectedAddress.postalCode}</p>
-                      <p className="mt-1 text-xs text-red-400 font-bold">{selectedAddress.country}</p>
+                      <p className="mt-1 text-xs text-red-400 font-bold">{selectedAddress.country || "Indonesia"}</p>
                     </div>
                   )}
                 </div>
@@ -244,31 +280,33 @@ export default function CheckoutPage() {
             {/* CARD 2: BARANG */}
             <div className="bg-[#2a0505] border border-[#5c1010] rounded-xl p-6 shadow-lg">
               <h2 className="text-xl font-bold mb-4 border-b border-[#5c1010] pb-2">Barang</h2>
-              <div className="space-y-4">
-                {cartItems.map((item) => (
-                  <div key={item._id} className="flex gap-4 bg-[#3f0e0e]/50 p-3 rounded-lg border border-[#5c1010]">
-                    {/* Gambar */}
-                    <div className="w-20 h-20 bg-black rounded overflow-hidden shrink-0 border border-[#5c1010]">
-                      {item.product.images?.[0] ? (
-                        <img src={item.product.images[0]} alt={item.product.name} className="w-full h-full object-cover" />
-                      ) : (
-                        <div className="flex items-center justify-center h-full text-xs text-gray-500">No IMG</div>
-                      )}
+              
+              {cartItems.length === 0 ? (
+                 <p className="text-center py-8 text-gray-400 italic">Keranjang kosong. Silakan belanja dulu.</p>
+              ) : (
+                <div className="space-y-4">
+                    {cartItems.map((item) => (
+                    <div key={item._id} className="flex gap-4 bg-[#3f0e0e]/50 p-3 rounded-lg border border-[#5c1010]">
+                        <div className="w-20 h-20 bg-black rounded overflow-hidden shrink-0 border border-[#5c1010]">
+                        {item.product.images?.[0] ? (
+                            <img src={item.product.images[0]} alt={item.product.name} className="w-full h-full object-cover" />
+                        ) : (
+                            <div className="flex items-center justify-center h-full text-xs text-gray-500">No IMG</div>
+                        )}
+                        </div>
+                        <div className="flex-1 flex flex-col justify-center">
+                        <h3 className="font-bold text-white line-clamp-1">{item.product.name}</h3>
+                        <p className="text-sm text-gray-400 mt-1">
+                            {item.quantity} x {formatRupiah(item.product.price)}
+                        </p>
+                        </div>
+                        <div className="flex items-center">
+                        <span className="font-bold text-[#ffaaaa]">{formatRupiah(item.product.price * item.quantity)}</span>
+                        </div>
                     </div>
-                    {/* Detail */}
-                    <div className="flex-1 flex flex-col justify-center">
-                      <h3 className="font-bold text-white line-clamp-1">{item.product.name}</h3>
-                      <p className="text-sm text-gray-400 mt-1">
-                        {item.quantity} x {formatRupiah(item.product.price)}
-                      </p>
-                    </div>
-                    {/* Total per item */}
-                    <div className="flex items-center">
-                      <span className="font-bold text-[#ffaaaa]">{formatRupiah(item.product.price * item.quantity)}</span>
-                    </div>
-                  </div>
-                ))}
-              </div>
+                    ))}
+                </div>
+              )}
             </div>
 
           </div>
@@ -276,27 +314,31 @@ export default function CheckoutPage() {
           {/* --- KOLOM KANAN (Span 1) --- */}
           <div className="space-y-6">
             
-            {/* CARD 3: METODE PEMBAYARAN */}
+            {/* CARD 3: METODE PEMBAYARAN (HANYA QRIS) */}
             <div className="bg-[#2a0505] border border-[#5c1010] rounded-xl p-6 shadow-lg h-fit">
               <h2 className="text-xl font-bold mb-4 border-b border-[#5c1010] pb-2">Metode Pembayaran</h2>
               <div className="flex flex-col gap-2">
-                {["TRANSFER_BCA", "TRANSFER_MANDIRI", "COD", "QRIS"].map((method) => (
-                  <label key={method} className={`flex items-center p-3 rounded cursor-pointer border transition-all ${paymentMethod === method ? "bg-[#3f0e0e] border-white" : "bg-transparent border-[#5c1010] hover:bg-[#3f0e0e]"}`}>
+                
+                {/* Opsi QRIS (Terkunci / Selalu Aktif) */}
+                <label className="flex items-center p-3 rounded cursor-pointer border transition-all bg-[#3f0e0e] border-white">
                     <input 
                       type="radio" 
                       name="payment" 
-                      value={method} 
-                      checked={paymentMethod === method} 
-                      onChange={(e) => setPaymentMethod(e.target.value)}
+                      value="QRIS" 
+                      checked={true}
+                      readOnly
                       className="accent-white w-4 h-4 mr-3"
                     />
-                    <span className="font-bold text-sm">{method.replace("_", " ")}</span>
-                  </label>
-                ))}
+                    <div className="flex items-center gap-2">
+                        <span className="font-bold text-sm">QRIS</span>
+                        <span className="text-[10px] bg-white text-black px-1.5 rounded font-bold">INSTANT</span>
+                    </div>
+                </label>
+
               </div>
             </div>
 
-            {/* CARD 4: RINGKASAN & TOMBOL BAYAR (Sticky) */}
+            {/* CARD 4: RINGKASAN & TOMBOL BAYAR */}
             <div className="bg-[#2a0505] border border-[#5c1010] rounded-xl p-6 shadow-xl sticky top-[100px]">
               <h2 className="text-lg font-bold mb-4 border-b border-[#5c1010] pb-2">Ringkasan Belanja</h2>
               
@@ -325,7 +367,7 @@ export default function CheckoutPage() {
                     : "bg-white hover:bg-gray-200"
                 }`}
               >
-                {processing ? "Memproses..." : "Bayar Sekarang"}
+                {processing ? "Memproses..." : "Bayar via QRIS"}
               </button>
             </div>
 
