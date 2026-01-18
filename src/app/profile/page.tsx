@@ -14,9 +14,8 @@ type Area = { width: number; height: number; x: number; y: number };
 const BASE_URL = process.env.NEXT_PUBLIC_BACKEND_URL;
 const BACKEND_TOKEN = process.env.NEXT_PUBLIC_BACKEND_TOKEN;
 
-const UPLOADER_BASE = process.env.UPLOAD_BASE;
-const UPLOADER_APIKEY = process.env.UPLOAD_APIKEY;
-const UPLOADER_ENDPOINT = process.env.UPLOAD_ENDPOINT;
+const UPLOADER_BASE = process.env.NEXT_PUBLIC_UPLOAD_BASE; 
+const UPLOADER_APIKEY = process.env.NEXT_PUBLIC_UPLOAD_APIKEY;
 
 
 // ============================================================================
@@ -64,14 +63,8 @@ interface BackendError {
 
 // Response dari Uploader External
 interface ExternalUploadResponse {
-  status: boolean;
-  result: {
-    url: string;
-    filename: string;
-    mimetype: string;
-    size: number;
-  };
-  message?: string;
+  message: string;
+  url: string;
 }
 
 interface TabProps {
@@ -868,30 +861,25 @@ function ProfilTab({ onSwitchToPassword, showModal, closeModal }: TabProps) {
       formDataUpload.append("image", file); // Key 'image' sesuai spec uploader
 
       // Bangun URL Uploader Eksternal
-      const uploadUrl = new URL(`${UPLOADER_BASE}${UPLOADER_ENDPOINT}`);
+      const uploadUrl = new URL("/api/proxy/features/upload", UPLOADER_BASE);
       uploadUrl.searchParams.append("apikey", UPLOADER_APIKEY as string); // Tambahkan params query apikey
+      
 
       // Upload ke Uploader
-      const uploadRes = await fetch(uploadUrl.toString(), {
-        method: "POST",
-        body: formDataUpload,
-      });
+     const uploadRes = await fetch(uploadUrl.toString(), {
+       method: "POST",
+       body: formDataUpload,
+     });
 
-      const text = await uploadRes.text();
-      let externalData: ExternalUploadResponse;
-      
-      try {
-        externalData = text ? JSON.parse(text) : {};
-      } catch {
-        throw new Error("Gagal Upload: Respon server uploader tidak valid (Bukan JSON).");
-      }
+     const externalData: ExternalUploadResponse = await uploadRes.json();
+     console.log("UPLOAD RESPONSE:", externalData);
 
-      // Validasi response dari uploader external
-      if (!externalData.status || !externalData.result?.url) {
-          throw new Error(externalData.message || "Gagal upload gambar ke uploader eksternal.");
-      }
 
-      const newUrl = externalData.result.url;
+     if (!externalData.url) {
+       throw new Error(externalData.message || "Upload gagal");
+     }
+
+     const newUrl = externalData.url;
 
       // Update URL gambar ke Backend App Utama
       const updateRes = await fetchAPI<UserProfile>(
@@ -904,13 +892,22 @@ function ProfilTab({ onSwitchToPassword, showModal, closeModal }: TabProps) {
       if (updateRes.ok) {
           setAvatarPreview(newUrl);
           localStorage.setItem("my_custom_avatar", newUrl);
-          
-          showModal(
-            "success",
-            "Berhasil",
-            "Foto profil berhasil diperbarui!",
-            () => setShowCropper(false)
-          );
+          setShowCropper(false);
+          setCropImageSrc(null);
+          setTimeout(() => {
+            showModal(
+              "success",
+              "Berhasil",
+              "Foto profil berhasil diperbarui!",
+              () => {},
+            );
+          }, 150);
+          // showModal(
+          //   "success",
+          //   "Berhasil",
+          //   "Foto profil berhasil diperbarui!",
+          //   () => setShowCropper(false)
+          // );
       }
     } catch (e: unknown) {
       showModal("error", "Gagal", getErrorMessage(e), () => {});
@@ -918,6 +915,10 @@ function ProfilTab({ onSwitchToPassword, showModal, closeModal }: TabProps) {
       setUploading(false);
     }
   };
+
+  useEffect(() => {
+    console.log("uploading:", uploading);
+  }, [uploading]);
 
   return (
     <div className="grid md:grid-cols-[280px,1fr] gap-12 relative">
@@ -1030,7 +1031,13 @@ function ProfilTab({ onSwitchToPassword, showModal, closeModal }: TabProps) {
               <input type="range" value={zoom} min={1} max={3} step={0.1} onChange={(e) => setZoom(Number(e.target.value))} className="w-full h-1 bg-gray-600 rounded-lg appearance-none cursor-pointer accent-[#E53935]" />
               <div className="flex gap-3 justify-end">
                 <button onClick={() => { setShowCropper(false); setCropImageSrc(null); }} className="px-4 py-2 text-gray-300 font-bold">Batal</button>
-                <button onClick={handleSaveCrop} disabled={uploading} className="px-6 py-2 bg-[#E53935] text-white rounded-lg font-bold">{uploading ? "..." : "Simpan"}</button>
+                <button 
+  onClick={handleSaveCrop} 
+  disabled={uploading}    
+  className="px-6 py-2 bg-[#E53935] hover:bg-[#c62828] disabled:bg-gray-600 text-white rounded-lg font-bold transition-colors"
+>
+  {uploading ? "Mengupload..." : "Simpan"}
+</button>
               </div>
             </div>
           </div>
