@@ -38,8 +38,10 @@ export default function AdminDashboardPage() {
   const [users, setUsers] = useState<User[]>([]);
   const [error, setError] = useState("");
 
-  // ✅ MENU STATE (UI ONLY)
-  const [activeMenu, setActiveMenu] = useState<"barang" | "pembayaran">("barang");
+  // MENU SIDEBAR
+  const [activeMenu, setActiveMenu] = useState<"barang" | "pembayaran">(
+    "barang"
+  );
 
   // ================= TOKEN =================
   useEffect(() => {
@@ -49,14 +51,13 @@ export default function AdminDashboardPage() {
     } else {
       setToken(t);
     }
-  }, []);
+  }, [router]);
 
   useEffect(() => {
-    if (!token) return;
-    fetchDashboard();
+    if (token) fetchDashboard();
   }, [token]);
 
-  const adminHeaders = {
+  const adminHeaders: HeadersInit = {
     Authorization: `Bearer ${token}`,
     "x-api-key": BACKEND_TOKEN || "",
     "Content-Type": "application/json",
@@ -65,11 +66,24 @@ export default function AdminDashboardPage() {
   // ================= FETCH =================
   const fetchDashboard = async () => {
     try {
-      const sellerRes = await fetch(`${BASE_URL}/api/admin/sellers`, { headers: adminHeaders });
-      const productRes = await fetch(`${BASE_URL}/api/admin/productsSeller`, { headers: adminHeaders });
-      const userRes = await fetch(`${BASE_URL}/api/admin/users`, { headers: adminHeaders });
+      const sellerRes = await fetch(
+        `${BASE_URL}/api/admin/sellers`,
+        { headers: adminHeaders }
+      );
 
-      if (!sellerRes.ok || !productRes.ok) throw new Error("Unauthorized");
+      const productRes = await fetch(
+        `${BASE_URL}/api/admin/productsSeller`,
+        { headers: adminHeaders }
+      );
+
+      const userRes = await fetch(
+        `${BASE_URL}/api/admin/users`,
+        { headers: adminHeaders }
+      );
+
+      if (!sellerRes.ok || !productRes.ok) {
+        throw new Error("Unauthorized");
+      }
 
       const sellerData = await sellerRes.json();
       const productData = await productRes.json();
@@ -100,10 +114,10 @@ export default function AdminDashboardPage() {
   };
 
   const banSeller = async (id: string, banned: boolean) => {
-    await fetch(`${BASE_URL}/api/admin/userseller/banned/${id}?banned=${banned}`, {
-      method: "PUT",
-      headers: adminHeaders,
-    });
+    await fetch(
+      `${BASE_URL}/api/admin/userseller/banned/${id}?banned=${banned}`,
+      { method: "PUT", headers: adminHeaders }
+    );
     fetchDashboard();
   };
 
@@ -126,10 +140,10 @@ export default function AdminDashboardPage() {
   };
 
   const banUser = async (id: string, banned: boolean) => {
-    await fetch(`${BASE_URL}/api/admin/userseller/banned/${id}?banned=${banned}`, {
-      method: "PUT",
-      headers: adminHeaders,
-    });
+    await fetch(
+      `${BASE_URL}/api/admin/userseller/banned/${id}?banned=${banned}`,
+      { method: "PUT", headers: adminHeaders }
+    );
     fetchDashboard();
   };
 
@@ -160,7 +174,10 @@ export default function AdminDashboardPage() {
     return (
       <div className="min-h-screen flex flex-col items-center justify-center bg-[#7A1F1F] text-white gap-4">
         <p>{error}</p>
-        <button onClick={() => router.push("/login/admin")} className="bg-red-600 px-6 py-2 rounded font-bold">
+        <button
+          onClick={() => router.push("/login/admin")}
+          className="bg-red-600 px-6 py-2 rounded font-bold"
+        >
           Login Admin
         </button>
       </div>
@@ -176,7 +193,9 @@ export default function AdminDashboardPage() {
         <button
           onClick={() => setActiveMenu("barang")}
           className={`w-full py-2 rounded ${
-            activeMenu === "barang" ? "bg-red-600" : "bg-black/30 hover:bg-black"
+            activeMenu === "barang"
+              ? "bg-red-600"
+              : "bg-black/30 hover:bg-black"
           }`}
         >
           Approval Barang
@@ -185,20 +204,24 @@ export default function AdminDashboardPage() {
         <button
           onClick={() => setActiveMenu("pembayaran")}
           className={`w-full py-2 rounded ${
-            activeMenu === "pembayaran" ? "bg-red-600" : "bg-black/30 hover:bg-black"
+            activeMenu === "pembayaran"
+              ? "bg-red-600"
+              : "bg-black/30 hover:bg-black"
           }`}
         >
           Approval Pembayaran
         </button>
 
-        <button onClick={logout} className="mt-6 bg-black/40 w-full py-2 rounded hover:bg-black">
+        <button
+          onClick={logout}
+          className="mt-6 bg-black/40 w-full py-2 rounded hover:bg-black"
+        >
           Logout
         </button>
       </aside>
 
       {/* MAIN */}
       <main className="flex-1 p-8 space-y-10">
-
         {/* ================= APPROVAL BARANG ================= */}
         {activeMenu === "barang" && (
           <>
@@ -206,29 +229,48 @@ export default function AdminDashboardPage() {
             <section>
               <h1 className="text-xl font-bold mb-4">Approval Seller</h1>
               {sellers.map((s) => (
-                <div key={s._id} className="bg-white text-black p-4 rounded flex justify-between mb-3">
+                <div
+                  key={s._id}
+                  className="bg-white text-black p-4 rounded flex justify-between mb-3"
+                >
                   <div>
                     <p className="font-bold">{s.name}</p>
                     <p className="text-sm">{s.email}</p>
                   </div>
+
                   <div className="flex gap-2 flex-wrap">
                     {!s.isVerifiedAccount && (
                       <>
-                        <button onClick={() => verifySeller(s._id, true)} className="bg-green-600 text-white px-3 py-1 rounded text-sm">
+                        <button
+                          onClick={() => verifySeller(s._id, true)}
+                          className="bg-green-600 text-white px-3 py-1 rounded text-sm"
+                        >
                           Approve
                         </button>
-                        <button onClick={() => verifySeller(s._id, false)} className="bg-red-600 text-white px-3 py-1 rounded text-sm">
+                        <button
+                          onClick={() => verifySeller(s._id, false)}
+                          className="bg-red-600 text-white px-3 py-1 rounded text-sm"
+                        >
                           Reject
                         </button>
                       </>
                     )}
-                    <button onClick={() => banSeller(s._id, true)} className="bg-yellow-600 text-white px-3 py-1 rounded text-sm">
+                    <button
+                      onClick={() => banSeller(s._id, true)}
+                      className="bg-yellow-600 text-white px-3 py-1 rounded text-sm"
+                    >
                       Ban
                     </button>
-                    <button onClick={() => banSeller(s._id, false)} className="bg-blue-600 text-white px-3 py-1 rounded text-sm">
+                    <button
+                      onClick={() => banSeller(s._id, false)}
+                      className="bg-blue-600 text-white px-3 py-1 rounded text-sm"
+                    >
                       Unban
                     </button>
-                    <button onClick={() => deleteSeller(s._id)} className="bg-black text-white px-3 py-1 rounded text-sm">
+                    <button
+                      onClick={() => deleteSeller(s._id)}
+                      className="bg-black text-white px-3 py-1 rounded text-sm"
+                    >
                       Delete
                     </button>
                   </div>
@@ -241,12 +283,20 @@ export default function AdminDashboardPage() {
               <h2 className="text-xl font-bold mb-4">Produk Seller</h2>
               <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                 {products.map((p) => (
-                  <div key={p._id} className="bg-white text-black p-4 rounded">
+                  <div
+                    key={p._id}
+                    className="bg-white text-black p-4 rounded"
+                  >
                     <p className="font-bold">{p.name}</p>
                     <p>{p.category}</p>
                     <p>Rp {p.price.toLocaleString()}</p>
-                    <p className="text-sm text-gray-600">Stok: {p.quantity}</p>
-                    <button onClick={() => deleteProduct(p._id)} className="mt-2 bg-red-600 text-white px-3 py-1 rounded text-sm">
+                    <p className="text-sm text-gray-600">
+                      Stok: {p.quantity}
+                    </p>
+                    <button
+                      onClick={() => deleteProduct(p._id)}
+                      className="mt-2 bg-red-600 text-white px-3 py-1 rounded text-sm"
+                    >
                       Delete Produk
                     </button>
                   </div>
@@ -259,22 +309,37 @@ export default function AdminDashboardPage() {
         {/* ================= APPROVAL PEMBAYARAN ================= */}
         {activeMenu === "pembayaran" && (
           <section>
-            <h2 className="text-xl font-bold mb-4">Approval Pembayaran / User</h2>
+            <h2 className="text-xl font-bold mb-4">
+              Approval Pembayaran / User
+            </h2>
             {users.map((u) => (
-              <div key={u._id} className="bg-white text-black p-4 rounded flex justify-between mb-3">
+              <div
+                key={u._id}
+                className="bg-white text-black p-4 rounded flex justify-between mb-3"
+              >
                 <div>
                   <p className="font-bold">{u.name}</p>
                   <p className="text-sm">@{u.username}</p>
                   <p className="text-xs">{u.phoneNumber}</p>
                 </div>
+
                 <div className="flex gap-2">
-                  <button onClick={() => banUser(u._id, true)} className="bg-yellow-600 text-white px-3 py-1 rounded text-sm">
+                  <button
+                    onClick={() => banUser(u._id, true)}
+                    className="bg-yellow-600 text-white px-3 py-1 rounded text-sm"
+                  >
                     Ban
                   </button>
-                  <button onClick={() => banUser(u._id, false)} className="bg-blue-600 text-white px-3 py-1 rounded text-sm">
+                  <button
+                    onClick={() => banUser(u._id, false)}
+                    className="bg-blue-600 text-white px-3 py-1 rounded text-sm"
+                  >
                     Unban
                   </button>
-                  <button onClick={() => deleteUser(u._id)} className="bg-black text-white px-3 py-1 rounded text-sm">
+                  <button
+                    onClick={() => deleteUser(u._id)}
+                    className="bg-black text-white px-3 py-1 rounded text-sm"
+                  >
                     Delete
                   </button>
                 </div>
@@ -282,7 +347,6 @@ export default function AdminDashboardPage() {
             ))}
           </section>
         )}
-
       </main>
     </div>
   );
