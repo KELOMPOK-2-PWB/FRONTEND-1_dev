@@ -3,8 +3,8 @@
 import React, { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 
-const BASE_URL = process.env.NEXT_PUBLIC_BACKEND_URL;
-const BACKEND_TOKEN = process.env.NEXT_PUBLIC_BACKEND_TOKEN;
+const BASE_URL = process.env.NEXT_PUBLIC_BACKEND_URL!;
+const BACKEND_TOKEN = process.env.NEXT_PUBLIC_BACKEND_TOKEN!;
 
 /* ================= TYPES ================= */
 type Product = {
@@ -12,6 +12,54 @@ type Product = {
   name: string;
   price: number;
   quantity: number;
+  images?: string[];
+};
+
+type OrderItem = {
+  product: { name: string };
+  quantity: number;
+  price: number;
+};
+
+type Order = {
+  _id: string;
+  uniqueCode: string;
+  status: string;
+  paymentProof?: string;
+  createdAt: string;
+  user: {
+    name: string;
+    email: string;
+  };
+  shippingAddress: {
+    street: string;
+    city: string;
+    province: string;
+    postalCode: string;
+  };
+  items: {
+    product: {
+      name: string;
+      price: number;
+      images?: string[];
+    };
+    quantity: number;
+    price: number;
+  }[];
+};
+
+type SellerProfile = {
+  name: string;
+  email: string;
+  phoneNumber: string;
+};
+
+type Address = {
+  _id: string;
+  street: string;
+  city: string;
+  province: string;
+  postalCode: string;
 };
 
 /* ================= PAGE ================= */
@@ -20,74 +68,133 @@ export default function SellerDashboardPage() {
 
   const [token, setToken] = useState<string | null>(null);
   const [products, setProducts] = useState<Product[]>([]);
+  const [orders, setOrders] = useState<Order[]>([]);
   const [loading, setLoading] = useState(true);
 
-  // ✅ MENU STATE
+  /* ===== PROFILE STATE ===== */
+  const [profile, setProfile] = useState<SellerProfile>({
+    name: "",
+    email: "",
+    phoneNumber: "",
+  });
+
+  const [addresses, setAddresses] = useState<Address[]>([]);
+  const [passwordForm, setPasswordForm] = useState({
+    currentPassword: "",
+    newPassword: "",
+  });
+
   const [activeMenu, setActiveMenu] = useState<
-    "dashboard" | "produk" | "pesanan" | "saldo" | "rekening"
+    "dashboard" | "produk" | "pesanan" | "profile"
   >("dashboard");
 
   /* ================= AUTH ================= */
   useEffect(() => {
     const t = localStorage.getItem("authToken");
-    const userRaw = localStorage.getItem("userData");
+    const u = localStorage.getItem("userData");
 
-    if (!t || !userRaw) {
+    if (!t || !u) {
       router.replace("/login");
       return;
     }
 
-    const user = JSON.parse(userRaw);
-    if (user.role !== "seller") {
+    if (JSON.parse(u).role !== "seller") {
       router.replace("/");
       return;
     }
 
     setToken(t);
-  }, []);
+  }, [router]);
 
-  /* ================= HEADERS ================= */
   const headers = {
     Authorization: `Bearer ${token}`,
-    "x-api-key": BACKEND_TOKEN || "",
+    "x-api-key": BACKEND_TOKEN,
     "Content-Type": "application/json",
   };
 
-  /* ================= FETCH PRODUCTS ================= */
+  /* ================= PRODUK ================= */
   useEffect(() => {
     if (!token) return;
 
-    const fetchProducts = async () => {
-      setLoading(true);
-      try {
-        const res = await fetch(`${BASE_URL}/api/products`, {
-          headers,
-        });
-
-        if (!res.ok) throw new Error("Gagal ambil produk");
-
-        const data = await res.json();
-        setProducts(data.data || []);
-      } catch (err) {
-        console.error(err);
-        alert("Gagal mengambil produk seller");
-      } finally {
-        setLoading(false);
-      }
-    };
-
-    fetchProducts();
+    fetch(`${BASE_URL}/api/products`, { headers })
+      .then((r) => r.json())
+      .then((d) => setProducts(d?.data || []))
+      .finally(() => setLoading(false));
   }, [token]);
 
-  const deleteProduct = async (id: string) => {
-    if (!confirm("Yakin hapus produk ini?")) return;
+  /* ================= PESANAN ================= */
+  useEffect(() => {
+    if (!token || activeMenu !== "pesanan") return;
 
-    await fetch(`${BASE_URL}/api/products/${id}`, {
+    fetch(`${BASE_URL}/api/seller/orders`, { headers })
+      .then((r) => r.json())
+      .then((d) => setOrders(Array.isArray(d.data) ? d.data : []));
+  }, [token, activeMenu]);
+
+  /* ================= PROFILE ================= */
+  useEffect(() => {
+    if (!token || activeMenu !== "profile") return;
+
+    fetch(`${BASE_URL}/api/seller/profile`, { headers })
+      .then((r) => r.json())
+      .then((d) =>
+        setProfile({
+          name: d.name || "",
+          email: d.email || "",
+          phoneNumber: d.phoneNumber || "",
+        })
+      );
+
+    fetch(`${BASE_URL}/api/seller/address-seller`, { headers })
+      .then((r) => r.json())
+      .then((d) => setAddresses(Array.isArray(d) ? d : []));
+  }, [token, activeMenu]);
+
+  /* ================= ACTION ================= */
+  const updateProfile = async () => {
+    await fetch(`${BASE_URL}/api/seller/profile`, {
+      method: "PUT",
+      headers,
+      body: JSON.stringify(profile),
+    });
+    alert("Profile berhasil diperbarui");
+  };
+
+  const changePassword = async () => {
+    await fetch(`${BASE_URL}/api/seller/change-password-seller`, {
+      method: "PUT",
+      headers,
+      body: JSON.stringify(passwordForm),
+    });
+    alert("Password berhasil diubah");
+    setPasswordForm({ currentPassword: "", newPassword: "" });
+  };
+
+  const addAddress = async () => {
+    const street = prompt("Street");
+    const city = prompt("City");
+    const province = prompt("Province");
+    const postalCode = prompt("Postal Code");
+    if (!street || !city || !province || !postalCode) return;
+
+    await fetch(`${BASE_URL}/api/seller/address-seller`, {
+      method: "POST",
+      headers,
+      body: JSON.stringify({ street, city, province, postalCode }),
+    });
+
+    const res = await fetch(`${BASE_URL}/api/seller/address-seller`, {
+      headers,
+    });
+    setAddresses(await res.json());
+  };
+
+  const deleteAddress = async (id: string) => {
+    await fetch(`${BASE_URL}/api/users/address/${id}`, {
       method: "DELETE",
       headers,
     });
-
-    setProducts((prev) => prev.filter((p) => p._id !== id));
+    setAddresses((p) => p.filter((a) => a._id !== id));
   };
 
   const logout = () => {
@@ -105,65 +212,27 @@ export default function SellerDashboardPage() {
 
   return (
     <div className="min-h-screen flex bg-[#7A1F1F] text-white">
-
-      {/* ========== SIDEBAR ========== */}
+      {/* SIDEBAR */}
       <aside className="w-[240px] bg-[#8B1D1D] p-6 space-y-2">
         <h2 className="font-bold text-lg mb-4">A SHOP</h2>
 
-        <button
-          onClick={() => setActiveMenu("dashboard")}
-          className={`w-full text-left px-4 py-2 rounded ${
-            activeMenu === "dashboard"
-              ? "bg-red-600"
-              : "hover:bg-black/40"
-          }`}
-        >
-          Dashboard
-        </button>
-
-        <button
-          onClick={() => setActiveMenu("produk")}
-          className={`w-full text-left px-4 py-2 rounded ${
-            activeMenu === "produk"
-              ? "bg-red-600"
-              : "hover:bg-black/40"
-          }`}
-        >
-          Produk
-        </button>
-
-        <button
-          onClick={() => setActiveMenu("pesanan")}
-          className={`w-full text-left px-4 py-2 rounded ${
-            activeMenu === "pesanan"
-              ? "bg-red-600"
-              : "hover:bg-black/40"
-          }`}
-        >
-          Daftar Pesanan
-        </button>
-
-        <button
-          onClick={() => setActiveMenu("saldo")}
-          className={`w-full text-left px-4 py-2 rounded ${
-            activeMenu === "saldo"
-              ? "bg-red-600"
-              : "hover:bg-black/40"
-          }`}
-        >
-          Saldo
-        </button>
-
-        <button
-          onClick={() => setActiveMenu("rekening")}
-          className={`w-full text-left px-4 py-2 rounded ${
-            activeMenu === "rekening"
-              ? "bg-red-600"
-              : "hover:bg-black/40"
-          }`}
-        >
-          Rekening
-        </button>
+        {["dashboard", "produk", "pesanan", "profile"].map((m) => (
+          <button
+            key={m}
+            onClick={() => setActiveMenu(m as any)}
+            className={`w-full text-left px-4 py-2 rounded ${
+              activeMenu === m ? "bg-red-600" : "hover:bg-black/40"
+            }`}
+          >
+            {m === "dashboard"
+              ? "Dashboard"
+              : m === "produk"
+              ? "Produk"
+              : m === "pesanan"
+              ? "Daftar Pesanan"
+              : "Profile"}
+          </button>
+        ))}
 
         <button
           onClick={logout}
@@ -173,20 +242,17 @@ export default function SellerDashboardPage() {
         </button>
       </aside>
 
-      {/* ========== MAIN ========== */}
+      {/* MAIN */}
       <main className="flex-1 p-8">
-
-        {/* DASHBOARD */}
         {activeMenu === "dashboard" && (
           <h1 className="text-xl font-bold">
             Selamat Datang di Dashboard Seller 👋
           </h1>
         )}
 
-        {/* PRODUK */}
         {activeMenu === "produk" && (
           <>
-            <div className="flex justify-between items-center mb-6">
+            <div className="flex justify-between mb-6">
               <h1 className="text-xl font-bold">Produk</h1>
               <button
                 onClick={() =>
@@ -201,23 +267,18 @@ export default function SellerDashboardPage() {
             <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
               {products.map((p) => (
                 <div key={p._id} className="bg-white text-black rounded">
-                  <div className="h-[150px] bg-gray-200" />
+                  <div className="h-[150px] bg-gray-200">
+                    {p.images?.[0] && (
+                      <img
+                        src={p.images[0]}
+                        className="w-full h-full object-cover"
+                      />
+                    )}
+                  </div>
                   <div className="p-4">
                     <p className="font-bold">{p.name}</p>
-                    <p>Rp {p.price.toLocaleString()}</p>
-                    <p className="text-sm">Stok: {p.quantity}</p>
-
-                    <div className="flex gap-2 mt-4">
-                      <button className="bg-black text-white px-3 py-1 rounded text-sm">
-                        Ubah
-                      </button>
-                      <button
-                        onClick={() => deleteProduct(p._id)}
-                        className="bg-red-600 text-white px-3 py-1 rounded text-sm"
-                      >
-                        Hapus
-                      </button>
-                    </div>
+                    <p>Rp {p.price.toLocaleString("id-ID")}</p>
+                    <p>Stok: {p.quantity}</p>
                   </div>
                 </div>
               ))}
@@ -225,13 +286,179 @@ export default function SellerDashboardPage() {
           </>
         )}
 
-        {/* MENU LAIN */}
-        {activeMenu !== "dashboard" && activeMenu !== "produk" && (
-          <p className="text-white/70">
-            Fitur <b>{activeMenu}</b> belum diimplementasikan
-          </p>
-        )}
+       {activeMenu === "pesanan" && (
+  <>
+    <h1 className="text-xl font-bold mb-6">
+      Daftar Pesanan Masuk
+    </h1>
 
+    {orders.length === 0 && (
+      <p className="text-white/70">Belum ada pesanan</p>
+    )}
+
+    <div className="space-y-4">
+      {orders.map((o) => (
+        <div
+          key={o._id}
+          className="bg-white text-black p-4 rounded"
+        >
+          <div className="flex justify-between mb-2">
+            <b>{o.uniqueCode}</b>
+            <span className="text-sm">
+              Status: {o.status}
+            </span>
+          </div>
+
+          <p className="text-sm">
+            Pembeli: {o.user.name} ({o.user.email})
+          </p>
+
+          <p className="text-sm">
+            Alamat: {o.shippingAddress.street},{" "}
+            {o.shippingAddress.city}
+          </p>
+
+          <div className="mt-3 border-t pt-2">
+            {o.items.map((i, idx) => (
+              <div
+                key={idx}
+                className="flex justify-between text-sm"
+              >
+                <span>
+                  {i.product.name} × {i.quantity}
+                </span>
+                <span>
+                  Rp {i.price.toLocaleString("id-ID")}
+                </span>
+              </div>
+            ))}
+          </div>
+
+          {o.paymentProof && (
+            <a
+              href={o.paymentProof}
+              target="_blank"
+              className="inline-block mt-3 text-blue-600 underline text-sm"
+            >
+              Lihat Bukti Pembayaran
+            </a>
+          )}
+        </div>
+      ))}
+    </div>
+  </>
+)}
+
+
+        {activeMenu === "profile" && (
+          <>
+            <h1 className="text-xl font-bold mb-6">Profil Toko</h1>
+
+            {/* BIODATA */}
+            <div className="bg-[#8B1D1D] p-6 rounded mb-6 max-w-xl">
+              <h2 className="font-bold mb-3">Biodata</h2>
+
+              <input
+                value={profile.name}
+                onChange={(e) =>
+                  setProfile({ ...profile, name: e.target.value })
+                }
+                className="w-full mb-2 p-2 rounded text-black"
+              />
+
+              <input
+                value={profile.email}
+                onChange={(e) =>
+                  setProfile({ ...profile, email: e.target.value })
+                }
+                className="w-full mb-2 p-2 rounded text-black"
+              />
+
+              <input
+                value={profile.phoneNumber}
+                onChange={(e) =>
+                  setProfile({
+                    ...profile,
+                    phoneNumber: e.target.value,
+                  })
+                }
+                className="w-full mb-3 p-2 rounded text-black"
+              />
+
+              <button
+                onClick={updateProfile}
+                className="bg-black px-4 py-2 rounded"
+              >
+                Simpan Profil
+              </button>
+            </div>
+
+            {/* PASSWORD */}
+            <div className="bg-[#8B1D1D] p-6 rounded mb-6 max-w-xl">
+              <h2 className="font-bold mb-3">Ubah Password</h2>
+
+              <input
+                type="password"
+                placeholder="Password Lama"
+                value={passwordForm.currentPassword}
+                onChange={(e) =>
+                  setPasswordForm({
+                    ...passwordForm,
+                    currentPassword: e.target.value,
+                  })
+                }
+                className="w-full mb-2 p-2 rounded text-black"
+              />
+
+              <input
+                type="password"
+                placeholder="Password Baru"
+                value={passwordForm.newPassword}
+                onChange={(e) =>
+                  setPasswordForm({
+                    ...passwordForm,
+                    newPassword: e.target.value,
+                  })
+                }
+                className="w-full mb-3 p-2 rounded text-black"
+              />
+
+              <button
+                onClick={changePassword}
+                className="bg-black px-4 py-2 rounded"
+              >
+                Ubah Password
+              </button>
+            </div>
+
+            {/* ALAMAT */}
+            <div className="bg-[#8B1D1D] p-6 rounded max-w-xl">
+              <h2 className="font-bold mb-3">Alamat</h2>
+
+              {addresses.map((a) => (
+                <div
+                  key={a._id}
+                  className="bg-white text-black p-2 rounded mb-2 flex justify-between"
+                >
+                  <span>{a.street}</span>
+                  <button
+                    onClick={() => deleteAddress(a._id)}
+                    className="text-red-600"
+                  >
+                    Hapus
+                  </button>
+                </div>
+              ))}
+
+              <button
+                onClick={addAddress}
+                className="mt-3 bg-black px-4 py-2 rounded"
+              >
+                Tambah Alamat
+              </button>
+            </div>
+          </>
+        )}
       </main>
     </div>
   );
