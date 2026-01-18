@@ -1,267 +1,330 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import React, { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 
-type User = {
-  username?: string;
-};
+interface NavbarProps {
+  isLoggedIn?: boolean;
+  darkMode?: boolean;
+}
 
-type CartItem = {
-  name: string;
-  quantity: number;
-  price: number | string;
-};
+// Konfigurasi API
+const BASE_URL = process.env.NEXT_PUBLIC_BACKEND_URL;
+const BACKEND_TOKEN = process.env.NEXT_PUBLIC_BACKEND_TOKEN;
 
-type NotifItem = {
-  title: string;
-  message: string;
-};
-
-type MessageItem = {
-  from: string;
-  preview: string;
-};
-
-export default function Navbar() {
+export default function Navbar({ isLoggedIn = false, darkMode = true }: NavbarProps) {
   const router = useRouter();
+  const [activeMenu, setActiveMenu] = useState<"cart" | "notif" | "profile" | null>(null);
+  
+  // State Data
+  const [userInitial, setUserInitial] = useState("A");
+  const [avatarUrl, setAvatarUrl] = useState<string | null>(null); // 🔥 STATE BARU UTK FOTO
+  const [cartCount, setCartCount] = useState(0); 
+  const [notifCount, setNotifCount] = useState(3); 
 
-  const [user, setUser] = useState<User | null>(null);
-  const [search, setSearch] = useState("");
-  const [isCartOpen, setIsCartOpen] = useState(false);
-  const [isNotifOpen, setIsNotifOpen] = useState(false);
-  const [isMessageOpen, setIsMessageOpen] = useState(false);
+  // State Search
+  const [searchQuery, setSearchQuery] = useState("");
 
-  // TODO: nanti isi dari backend / context
-  const [cartItems] = useState<CartItem[]>([]);
-  const [notifItems] = useState<NotifItem[]>([]);
-  const [messageItems] = useState<MessageItem[]>([]);
-
+  // 1. Ambil Data User (Foto & Inisial)
   useEffect(() => {
-    const storedUser = localStorage.getItem("userData");
-    if (storedUser) setUser(JSON.parse(storedUser) as User);
-  }, []);
+    if (typeof window !== "undefined" && isLoggedIn) {
+      try {
+        // A. Ambil Data Dasar
+        const userDataStr = localStorage.getItem("userData");
+        let backendAvatar = null;
+        
+        if (userDataStr) {
+          const user = JSON.parse(userDataStr);
+          const identifier = user.email || user.username || "A";
+          setUserInitial(identifier.charAt(0).toUpperCase());
+          backendAvatar = user.avatar;
+        }
 
-  const logout = () => {
+        // B. Cek Foto Lokal ("Cheat" LocalStorage dari Profile Page)
+        const localAvatar = localStorage.getItem("my_custom_avatar");
+
+        // C. Tentukan Foto Mana yang Dipakai (Prioritas: Lokal > Backend)
+        if (localAvatar) {
+            setAvatarUrl(localAvatar);
+        } else if (backendAvatar) {
+            setAvatarUrl(backendAvatar);
+        } else {
+            setAvatarUrl(null); // Pakai Inisial
+        }
+
+      } catch (e) {
+        console.error("Gagal load user data", e);
+      }
+    }
+  }, [isLoggedIn]);
+
+  // 2. Fetch Cart Count Real-Time dari API
+  useEffect(() => {
+    const fetchCartCount = async () => {
+      if (!isLoggedIn) return;
+
+      const token = localStorage.getItem("authToken");
+      if (!token) return;
+
+      try {
+        const res = await fetch(`${BASE_URL}/api/cart`, {
+          method: "GET",
+          headers: {
+            "Content-Type": "application/json",
+            "Authorization": `Bearer ${token}`,
+            "x-api-key": BACKEND_TOKEN || "",
+          },
+        });
+
+        const data = await res.json();
+
+        if (res.ok) {
+          const items = Array.isArray(data) ? data : (data.data || []);
+          setCartCount(items.length);
+        }
+      } catch (err) {
+        console.error("Gagal mengambil data keranjang:", err);
+      }
+    };
+
+    fetchCartCount();
+  }, [isLoggedIn]);
+
+  // 3. Handle Search
+  const handleSearch = (e: React.FormEvent) => {
+    e.preventDefault(); 
+    if (searchQuery.trim()) {
+      router.push(`/search?q=${encodeURIComponent(searchQuery)}`);
+    }
+  };
+
+  const handleLogout = () => {
     localStorage.removeItem("authToken");
     localStorage.removeItem("userData");
-    router.push("/login/users");
-  };
-
-  const toggleCart = () => {
-    setIsCartOpen((prev) => !prev);
-    setIsNotifOpen(false);
-    setIsMessageOpen(false);
-  };
-
-  const toggleNotif = () => {
-    setIsNotifOpen((prev) => !prev);
-    setIsCartOpen(false);
-    setIsMessageOpen(false);
-  };
-
-  const toggleMessage = () => {
-    setIsMessageOpen((prev) => !prev);
-    setIsCartOpen(false);
-    setIsNotifOpen(false);
+    localStorage.removeItem("my_custom_avatar"); // 🔥 Hapus foto lokal pas logout
+    window.location.href = "/login/users"; 
   };
 
   return (
-    <nav className="fixed top-0 left-0 z-50 w-full bg-[#7A1616] text-white shadow-lg">
-      {/* WRAPPER BIAR TATA LETAK RAPI */}
-      <div className="px-5 py-3 flex items-center w-full">
-        {/* LEFT: logo + kategori */}
-        <div className="flex items-center gap-4 w-[25%] min-w-[220px]">
-          <div
-            onClick={() => router.push("/")}
-            className="cursor-pointer flex items-center gap-2"
-          >
-            {/* logo A agak lebih besar */}
-            <img src="/A-logo.png" alt="Ashura Shop Logo" className="w-10 h-10" />
-            <span className="font-bold text-xl">SHOP</span>
-          </div>
+    <>
+      {/* Overlay Gelap */}
+      {(activeMenu === "cart" || activeMenu === "notif") && (
+        <div className="fixed inset-0 bg-black/50 z-40 transition-opacity duration-300" />
+      )}
 
-          <button className="bg-[#8C1B1B] hover:bg-[#9a1d1d] px-4 py-2 rounded-md text-sm">
-            Kategori
-          </button>
-        </div>
-
-        {/* CENTER: search bar tepat di tengah */}
-        <div className="flex-1 flex justify-center">
-          <div className="bg-[#8C1B1B] flex items-center px-3 py-2 rounded-md w-full max-w-[500px]">
-            <input
-              type="text"
-              className="bg-transparent outline-none w-full text-white placeholder-gray-200 text-sm"
-              placeholder="Cari di Ashura"
-              value={search}
-              onChange={(e) => setSearch(e.target.value)}
-            />
-          </div>
-        </div>
-
-        {/* RIGHT: keranjang, notif, pesan, user */}
-        <div className="flex items-center gap-6 w-[25%] min-w-[220px] justify-end relative">
-          {/* Keranjang */}
-          <div className="relative cursor-pointer text-xl" onClick={toggleCart}>
-            🛒
-            <span className="absolute -top-2 -right-3 bg-pink-500 text-xs px-1 rounded-full">
-              {cartItems.length}
-            </span>
-          </div>
-
-          {/* Notifikasi */}
-          <div className="relative cursor-pointer text-xl" onClick={toggleNotif}>
-            🔔
-            {notifItems.length > 0 && (
-              <span className="absolute -top-2 -right-3 bg-green-500 text-xs px-1 rounded-full">
-                {notifItems.length}
+      <nav 
+        className={`w-full h-[70px] flex items-center justify-between px-6 fixed top-0 z-50 border-b shadow-md transition-colors duration-300 ${
+          darkMode 
+            ? "bg-[#7A1616] text-white border-[#9a3a3a]" 
+            : "bg-white text-gray-800 border-gray-200"
+        }`}
+      >
+        
+        {/* BAGIAN KIRI: LOGO + KATEGORI */}
+        <div className="flex items-center gap-8">
+            <div 
+              onClick={() => router.push('/')}
+              className="flex items-center gap-2 cursor-pointer hover:scale-105 transition-transform"
+            >
+              <img 
+                src="/A-logo.png" 
+                alt="Logo" 
+                className="w-20 h-20 object-contain drop-shadow-md" 
+              />
+              <span className={`font-black text-xl tracking-wide ${darkMode ? "text-white" : "text-[#7A1616]"}`}>
+                SHOP
               </span>
-            )}
-          </div>
-
-          {/* Pesan */}
-          <div className="relative cursor-pointer text-xl" onClick={toggleMessage}>
-            ✉️
-            {messageItems.length > 0 && (
-              <span className="absolute -top-2 -right-3 bg-blue-500 text-xs px-1 rounded-full">
-                {messageItems.length}
-              </span>
-            )}
-          </div>
-
-          {user ? (
-            <div className="flex items-center gap-2">
-              <div
-                onClick={() => router.push("/dashboard/user")}
-                className="bg-white text-black font-bold w-8 h-8 flex items-center justify-center rounded-full cursor-pointer"
-              >
-                {user.username?.charAt(0).toUpperCase() ?? "U"}
-              </div>
-              <button
-                onClick={logout}
-                className="bg-black/40 px-3 py-1 rounded-md text-sm"
-              >
-                Logout
-              </button>
             </div>
+
+            <span 
+                onClick={() => router.push('/kategori')}
+                className={`text-base font-bold tracking-wide cursor-pointer transition-colors duration-200 ${
+                  darkMode 
+                    ? "text-gray-200 hover:text-[#3f0e0e] hover:shadow-red-500" 
+                    : "text-gray-600 hover:text-[#7A1616]"
+                }`}
+            >
+                Kategori
+            </span>
+        </div>
+
+        {/* SEARCH BAR */}
+        <div className="flex-1 max-w-xl mx-8 hidden md:block">
+          <form onSubmit={handleSearch} className="relative">
+            <input 
+              type="text" 
+              placeholder="Cari di Ashura" 
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              className={`w-full border rounded-md py-2 px-4 text-sm focus:outline-none focus:border-[#e53935] transition-colors ${
+                darkMode 
+                  ? "bg-[#5c1010] border-[#9a3a3a] text-white placeholder-gray-400" 
+                  : "bg-gray-100 border-gray-300 text-gray-800 placeholder-gray-500"
+              }`}
+            />
+            <button 
+              type="submit"
+              className={`absolute right-2 top-1/2 -translate-y-1/2 p-1 rounded hover:opacity-80 ${darkMode ? "bg-[#7A1616]" : "bg-gray-200"}`}
+            >
+              <svg xmlns="http://www.w3.org/2000/svg" className={`h-4 w-4 ${darkMode ? "text-gray-300" : "text-gray-600"}`} fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+              </svg>
+            </button>
+          </form>
+        </div>
+
+        {/* MENU KANAN */}
+        <div className="flex items-center gap-6">
+          
+          {isLoggedIn ? (
+            <>
+              {/* 1. Keranjang */}
+              <div 
+                className="relative group py-4"
+                onMouseEnter={() => setActiveMenu("cart")}
+                onMouseLeave={() => setActiveMenu(null)}
+              >
+                <div 
+                  className="cursor-pointer relative"
+                  onClick={() => router.push('/keranjang')}
+                >
+                  <svg xmlns="http://www.w3.org/2000/svg" className={`h-7 w-7 transition ${darkMode ? "text-gray-300 hover:text-white" : "text-gray-600 hover:text-[#e53935]"}`} fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M3 3h2l.4 2M7 13h10l4-8H5.4M7 13L5.4 5M7 13l-2.293 2.293c-.63.63-.184 1.707.707 1.707H17m0 0a2 2 0 100 4 2 2 0 000-4zm-8 2a2 2 0 11-4 0 2 2 0 014 0z" />
+                  </svg>
+                  {cartCount > 0 && (
+                    <span className="absolute -top-2 -right-2 bg-[#e53935] text-white text-[10px] font-bold px-1.5 py-0.5 rounded-full border border-white shadow-sm">
+                      {cartCount}
+                    </span>
+                  )}
+                </div>
+
+                {activeMenu === "cart" && (
+                  <div className={`absolute top-[55px] right-[-80px] md:right-0 w-[320px] min-h-[200px] border shadow-2xl rounded-b-md z-50 flex flex-col animate-fadeIn ${darkMode ? "bg-[#5c1010] border-[#9a3a3a]" : "bg-white border-gray-200"}`}>
+                    <div className={`p-3 border-b flex justify-between items-center ${darkMode ? "bg-[#4a0b0b] border-[#7a1f1f]" : "bg-gray-50 border-gray-200"}`}>
+                      <span className={`font-bold text-sm ${darkMode ? "text-white" : "text-gray-800"}`}>Keranjang ({cartCount})</span>
+                      <span 
+                        className="text-xs text-[#e53935] cursor-pointer hover:underline"
+                        onClick={() => router.push('/keranjang')}
+                      >
+                        Lihat Semua
+                      </span>
+                    </div>
+                    <div className={`flex-1 flex flex-col items-center justify-center text-sm gap-2 p-6 ${darkMode ? "text-gray-400" : "text-gray-500"}`}>
+                        {cartCount > 0 ? (
+                          <div className="text-center w-full">
+                             <p className="mb-4">Ada {cartCount} barang di keranjang</p>
+                             <button 
+                                onClick={() => router.push('/keranjang')} 
+                                className="bg-[#e53935] text-white px-6 py-2 rounded font-bold text-xs hover:bg-red-700 w-full transition-colors"
+                             >
+                               Lihat Keranjang
+                             </button>
+                          </div>
+                        ) : (
+                          <>
+                            <svg xmlns="http://www.w3.org/2000/svg" className="h-10 w-10 opacity-50" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1} d="M16 11V7a4 4 0 00-8 0v4M5 9h14l1 12H4L5 9z" />
+                            </svg>
+                            <p>Keranjang belanja kosong</p>
+                          </>
+                        )}
+                    </div>
+                  </div>
+                )}
+              </div>
+
+              {/* 2. Notifikasi */}
+              <div 
+                className="relative group py-4"
+                onMouseEnter={() => setActiveMenu("notif")}
+                onMouseLeave={() => setActiveMenu(null)}
+              >
+                <div className="cursor-pointer relative">
+                  <svg xmlns="http://www.w3.org/2000/svg" className={`h-7 w-7 transition ${darkMode ? "text-gray-300 hover:text-white" : "text-gray-600 hover:text-[#e53935]"}`} fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M15 17h5l-1.405-1.405A2.032 2.032 0 0118 14.158V11a6.002 6.002 0 00-4-5.659V5a2 2 0 10-4 0v.341C7.67 6.165 6 8.388 6 11v3.159c0 .538-.214 1.055-.595 1.436L4 17h5m6 0v1a3 3 0 11-6 0v-1m6 0H9" />
+                  </svg>
+                  {notifCount > 0 && (
+                    <span className="absolute -top-1 -right-1 bg-[#e53935] text-white text-[9px] font-bold px-1.5 py-0.5 rounded-full border border-white shadow-sm">
+                      {notifCount}
+                    </span>
+                  )}
+                </div>
+
+                {activeMenu === "notif" && (
+                  <div className={`absolute top-[55px] right-[-50px] w-[300px] min-h-[200px] border shadow-2xl rounded-b-md z-50 flex flex-col animate-fadeIn ${darkMode ? "bg-[#5c1010] border-[#9a3a3a]" : "bg-white border-gray-200"}`}>
+                    <div className={`p-3 border-b flex justify-between items-center ${darkMode ? "bg-[#4a0b0b] border-[#7a1f1f]" : "bg-gray-50 border-gray-200"}`}>
+                      <span className={`font-bold text-sm ${darkMode ? "text-white" : "text-gray-800"}`}>Notifikasi ({notifCount})</span>
+                      <span className="text-xs text-[#e53935] cursor-pointer hover:underline">Tandai dibaca</span>
+                    </div>
+                    <div className={`flex-1 flex items-center justify-center text-sm p-6 ${darkMode ? "text-gray-400" : "text-gray-500"}`}>
+                      Belum ada notifikasi baru
+                    </div>
+                  </div>
+                )}
+              </div>
+
+              {/* 3. Pesan */}
+              <div 
+                className="cursor-pointer hover:scale-110 transition-transform relative"
+                onClick={() => router.push('/pesan')}
+              >
+                <svg xmlns="http://www.w3.org/2000/svg" className={`h-7 w-7 transition ${darkMode ? "text-gray-300 hover:text-white" : "text-gray-600 hover:text-[#e53935]"}`} fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" />
+                </svg>
+              </div>
+
+              {/* 4. Profile (Avatar ATAU Inisial) */}
+              <div 
+                className="relative group py-4 pl-2"
+                onMouseEnter={() => setActiveMenu("profile")}
+                onMouseLeave={() => setActiveMenu(null)}
+              >
+                {/* 🔥 LOGIKA TAMPILAN PROFIL */}
+                <div className={`w-9 h-9 rounded-full flex items-center justify-center font-bold cursor-pointer border transition-all overflow-hidden ${darkMode ? "bg-purple-600 text-white border-white/30 hover:border-white" : "bg-purple-600 text-white border-purple-800 hover:bg-purple-700"}`}>
+                  {avatarUrl ? (
+                    <img src={avatarUrl} alt="Avatar" className="w-full h-full object-cover" />
+                  ) : (
+                    userInitial
+                  )}
+                </div>
+
+                {/* Dropdown Menu */}
+                {activeMenu === "profile" && (
+                  <div className={`absolute top-[55px] right-0 w-[180px] border shadow-xl rounded-b-md z-50 py-2 animate-fadeIn flex flex-col ${darkMode ? "bg-[#5c1010] border-[#9a3a3a]" : "bg-white border-gray-200"}`}>
+                    <button 
+                      onClick={() => router.push('/profile')}
+                      className={`flex items-center gap-3 px-4 py-3 text-sm w-full text-left transition-colors ${darkMode ? "text-gray-200 hover:bg-[#7a1f1f] hover:text-white" : "text-gray-700 hover:bg-gray-100 hover:text-black"}`}
+                    >
+                        Akun Saya
+                    </button>
+                    <button 
+                      onClick={() => router.push('/pesanan')}
+                      className={`flex items-center gap-3 px-4 py-3 text-sm w-full text-left transition-colors ${darkMode ? "text-gray-200 hover:bg-[#7a1f1f] hover:text-white" : "text-gray-700 hover:bg-gray-100 hover:text-black"}`}
+                    >
+                        Pesanan Saya
+                    </button>
+                    <div className={`h-px my-1 mx-2 ${darkMode ? "bg-[#7a1f1f]" : "bg-gray-200"}`}></div>
+                    <button 
+                      onClick={handleLogout}
+                      className={`flex items-center gap-3 px-4 py-3 text-sm w-full text-left transition-colors ${darkMode ? "text-red-300 hover:bg-[#7a1f1f] hover:text-red-100" : "text-red-600 hover:bg-red-50"}`}
+                    >
+                        Log Out
+                    </button>
+                  </div>
+                )}
+              </div>
+            </>
           ) : (
-            <button
-              onClick={() => router.push("/login/users")}
-              className="bg-white text-black px-4 py-2 rounded-md font-semibold text-sm"
+            // --- TAMPILAN BELUM LOGIN ---
+            <button 
+              onClick={() => router.push('/login/users')}
+              className="bg-[#e53935] hover:bg-[#b71c1c] text-white px-6 py-2 rounded-md font-bold text-sm transition-all shadow-lg border border-[#ff5f5f] hover:shadow-red-500/30"
             >
               Masuk
             </button>
           )}
-
-          {/* PANEL KERANJANG (DROPDOWN) */}
-          {isCartOpen && (
-            <div className="absolute right-0 top-full mt-2 w-80 bg-[#7A1616] border border-[#9a3a3a] rounded-md shadow-xl p-4">
-              <div className="flex items-center justify-between mb-2">
-                <span className="font-semibold text-sm">
-                  Keranjang ({cartItems.length})
-                </span>
-                <button
-                  className="text-xs underline"
-                  onClick={() => router.push("/cart")}
-                >
-                  Lihat
-                </button>
-              </div>
-
-              {cartItems.length === 0 ? (
-                <p className="text-xs text-gray-200">Keranjang masih kosong.</p>
-              ) : (
-                <div className="max-h-64 overflow-y-auto flex flex-col gap-2 text-xs">
-                  {cartItems.map((item, idx) => (
-                    <div
-                      key={idx}
-                      className="flex justify-between items-center border-b border-white/10 pb-1"
-                    >
-                      <div>
-                        <p className="font-medium truncate">{item.name}</p>
-                        <p className="text-[10px] text-gray-200">
-                          x{item.quantity}
-                        </p>
-                      </div>
-                      <span>{item.price}</span>
-                    </div>
-                  ))}
-                </div>
-              )}
-            </div>
-          )}
-
-          {/* PANEL NOTIFIKASI (DROPDOWN) */}
-          {isNotifOpen && (
-            <div className="absolute right-16 top-full mt-2 w-72 bg-[#7A1616] border border-[#9a3a3a] rounded-md shadow-xl p-4">
-              <div className="flex items-center justify-between mb-2">
-                <span className="font-semibold text-sm">Notifikasi</span>
-                <button
-                  className="text-xs underline"
-                  onClick={() => router.push("/notifications")}
-                >
-                  Lihat semua
-                </button>
-              </div>
-
-              {notifItems.length === 0 ? (
-                <p className="text-xs text-gray-200">
-                  Belum ada notifikasi baru.
-                </p>
-              ) : (
-                <div className="max-h-64 overflow-y-auto flex flex-col gap-2 text-xs">
-                  {notifItems.map((notif, idx) => (
-                    <div
-                      key={idx}
-                      className="border-b border-white/10 pb-2 last:border-0 last:pb-0"
-                    >
-                      <p className="font-medium">{notif.title}</p>
-                      <p className="text-[10px] text-gray-200">
-                        {notif.message}
-                      </p>
-                    </div>
-                  ))}
-                </div>
-              )}
-            </div>
-          )}
-
-          {/* PANEL PESAN (DROPDOWN) */}
-          {isMessageOpen && (
-            <div className="absolute right-28 top-full mt-2 w-72 bg-[#7A1616] border border-[#9a3a3a] rounded-md shadow-xl p-4">
-              <div className="flex items-center justify-between mb-2">
-                <span className="font-semibold text-sm">Pesan</span>
-                <button
-                  className="text-xs underline"
-                  onClick={() => router.push("/messages")}
-                >
-                  Lihat semua
-                </button>
-              </div>
-
-              {messageItems.length === 0 ? (
-                <p className="text-xs text-gray-200">
-                  Belum ada pesan baru.
-                </p>
-              ) : (
-                <div className="max-h-64 overflow-y-auto flex flex-col gap-2 text-xs">
-                  {messageItems.map((msg, idx) => (
-                    <div
-                      key={idx}
-                      className="border-b border-white/10 pb-2 last:border-0 last:pb-0"
-                    >
-                      <p className="font-medium truncate">{msg.from}</p>
-                      <p className="text-[10px] text-gray-200 truncate">
-                        {msg.preview}
-                      </p>
-                    </div>
-                  ))}
-                </div>
-              )}
-            </div>
-          )}
         </div>
-      </div>
-    </nav>
+      </nav>
+    </>
   );
 }

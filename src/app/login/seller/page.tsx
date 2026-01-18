@@ -6,7 +6,7 @@ import { useRouter } from "next/navigation";
 const BASE_URL = process.env.NEXT_PUBLIC_BACKEND_URL;
 const BACKEND_TOKEN = process.env.NEXT_PUBLIC_BACKEND_TOKEN;
 
-export default function LoginPage() {
+export default function LoginPageseller() {
   const router = useRouter();
   const [darkMode, setDarkMode] = useState(true);
   const [form, setForm] = useState({ emailOrUsername: "", password: "" });
