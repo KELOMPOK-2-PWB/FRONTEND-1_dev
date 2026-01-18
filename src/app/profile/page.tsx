@@ -10,9 +10,14 @@ import { motion, AnimatePresence, Variants } from "framer-motion";
 type Point = { x: number; y: number };
 type Area = { width: number; height: number; x: number; y: number };
 
-// --- KONFIGURASI API
+// --- KONFIGURASI API (DARI ENV) ---
 const BASE_URL = process.env.NEXT_PUBLIC_BACKEND_URL;
 const BACKEND_TOKEN = process.env.NEXT_PUBLIC_BACKEND_TOKEN;
+
+const UPLOADER_BASE = process.env.UPLOAD_BASE;
+const UPLOADER_APIKEY = process.env.UPLOAD_APIKEY;
+const UPLOADER_ENDPOINT = process.env.UPLOAD_ENDPOINT;
+
 
 // ============================================================================
 // 1. STRICT TYPES DEFINITION
@@ -57,10 +62,15 @@ interface BackendError {
   error?: string;
 }
 
-interface UploadResponse {
-  url?: string;
-  image?: string;
-  data?: { url: string };
+// Response dari Uploader External
+interface ExternalUploadResponse {
+  status: boolean;
+  result: {
+    url: string;
+    filename: string;
+    mimetype: string;
+    size: number;
+  };
   message?: string;
 }
 
@@ -105,9 +115,8 @@ function getErrorMessage(error: unknown): string {
 }
 
 // Fix URL Protocol (HTTPS)
-function formatUrl(endpoint: string): string {
-  // Handle jika BASE_URL undefined
-  let baseUrl = (BASE_URL || "").trim();
+function formatUrl(endpoint: string, base: string | undefined): string {
+  let baseUrl = (base || "").trim();
   
   if (!baseUrl) return endpoint;
   if (!baseUrl.startsWith("http")) {
@@ -116,11 +125,14 @@ function formatUrl(endpoint: string): string {
   if (baseUrl.endsWith("/")) {
     baseUrl = baseUrl.slice(0, -1);
   }
+  // Jika endpoint sudah lengkap (http...), kembalikan langsung
+  if (endpoint.startsWith("http")) return endpoint;
+
   const cleanEndpoint = endpoint.startsWith("/") ? endpoint : `/${endpoint}`;
   return `${baseUrl}${cleanEndpoint}`;
 }
 
-// Fetch Wrapper Strictly Typed
+// Fetch Wrapper Strictly Typed (Untuk Backend App Utama)
 async function fetchAPI<T>(
   endpoint: string,
   method: string,
@@ -129,11 +141,11 @@ async function fetchAPI<T>(
 ): Promise<{ ok: boolean; status: number; data: T | null }> {
   const headers: Record<string, string> = {
     "Content-Type": "application/json",
-    "x-api-key": (BACKEND_TOKEN as string) || "", // Casting agar aman di TS
+    "x-api-key": (BACKEND_TOKEN as string) || "",
   };
   if (token) headers["Authorization"] = `Bearer ${token}`;
 
-  const fullUrl = formatUrl(endpoint);
+  const fullUrl = formatUrl(endpoint, BASE_URL);
 
   try {
     const res = await fetch(fullUrl, {
@@ -841,6 +853,7 @@ function ProfilTab({ onSwitchToPassword, showModal, closeModal }: TabProps) {
     }
   };
 
+  // --- 🔥 PERBAIKAN: UPLOADER EXTERNAL LOGIC ---
   const handleSaveCrop = async () => {
     if (!cropImageSrc || !croppedAreaPixels) return;
     setUploading(true);
@@ -852,36 +865,39 @@ function ProfilTab({ onSwitchToPassword, showModal, closeModal }: TabProps) {
       const token = localStorage.getItem("authToken");
       const file = dataURLtoFile(croppedImageBase64, "avatar.jpg");
       const formDataUpload = new FormData();
-      formDataUpload.append("image", file);
+      formDataUpload.append("image", file); // Key 'image' sesuai spec uploader
 
-      const uploadUrl = formatUrl(`/api/proxy/features/upload?apikey=${BACKEND_TOKEN}`);
+      // Bangun URL Uploader Eksternal
+      const uploadUrl = new URL(`${UPLOADER_BASE}${UPLOADER_ENDPOINT}`);
+      uploadUrl.searchParams.append("apikey", UPLOADER_APIKEY as string); // Tambahkan params query apikey
 
-      const uploadRes = await fetch(uploadUrl, {
+      // Upload ke Uploader
+      const uploadRes = await fetch(uploadUrl.toString(), {
         method: "POST",
-        headers: {
-          Authorization: `Bearer ${token}`,
-        },
         body: formDataUpload,
       });
 
       const text = await uploadRes.text();
-      let upData: UploadResponse;
+      let externalData: ExternalUploadResponse;
+      
       try {
-        upData = text ? JSON.parse(text) : {};
+        externalData = text ? JSON.parse(text) : {};
       } catch {
-        throw new Error("Gagal Upload: Respon server proxy tidak valid.");
+        throw new Error("Gagal Upload: Respon server uploader tidak valid (Bukan JSON).");
       }
 
-      const newUrl = upData.url || upData.data?.url || upData.image;
-
-      if (!uploadRes.ok || !newUrl) {
-          throw new Error(upData.message || "Gagal upload gambar.");
+      // Validasi response dari uploader external
+      if (!externalData.status || !externalData.result?.url) {
+          throw new Error(externalData.message || "Gagal upload gambar ke uploader eksternal.");
       }
 
+      const newUrl = externalData.result.url;
+
+      // Update URL gambar ke Backend App Utama
       const updateRes = await fetchAPI<UserProfile>(
         "/api/users/profile",
         "PUT",
-        { avatar: newUrl },
+        { avatar: newUrl }, // Kirim URL hasil upload
         token || ""
       );
 
