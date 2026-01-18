@@ -1,23 +1,10 @@
 "use client";
 
 import React, { useState, useEffect } from "react";
+import { useRouter } from "next/navigation";
 
-// --- 1. MOCK ROUTER (Agar aman di preview) ---
-const useRouter = () => ({
-  push: (path: string) => {
-    if (typeof window !== 'undefined') {
-      try {
-        window.location.href = path;
-      } catch (e) {
-        console.error("Redirect error:", e);
-      }
-    }
-  }
-});
-
-// --- 2. KONFIGURASI API (Hardcoded agar tidak error 'process is not defined') ---
-const BASE_URL = "https://be.ashura.web.id";
-const BACKEND_TOKEN = "q3948tp9qdyuprtqype4uitqp9v34ytqp934ciutpq9ieyp5iqvhrtniwuhrogiwyi45";
+const BASE_URL = process.env.NEXT_PUBLIC_BACKEND_URL;
+const BACKEND_TOKEN = process.env.NEXT_PUBLIC_BACKEND_TOKEN;
 
 export default function NewPasswordPage() {
   const router = useRouter();
@@ -28,18 +15,21 @@ export default function NewPasswordPage() {
   const [message, setMessage] = useState("");
   const [error, setError] = useState("");
 
+  // memindahkan pengecekan token ke useeffect agar tidak error di server-side rendering
   useEffect(() => {
-    const userEmail = sessionStorage.getItem("resetEmail"); 
-    const resetOtp = sessionStorage.getItem("resetOtp"); 
+    const userEmail = sessionStorage.getItem("resetEmail");
+    const resetOtp = sessionStorage.getItem("resetOtp");
 
     if (!userEmail || !resetOtp) {
-      // alert("Sesi habis. Silakan ulangi proses lupa password."); // Optional: alert bisa mengganggu UX
-      console.warn("Sesi reset password habis/tidak valid.");
+      // Kalau data hilang (misal di-refresh paksa), kembalikan ke awal
+      alert("Sesi habis. Silakan ulangi proses lupa password.");
       router.push("/forgotpassword");
     }
-  }, []); // Dependency array kosong agar run once on mount
+  }, [router]);
 
-  const handleSubmit = async (e: React.FormEvent<HTMLFormElement>): Promise<void> => {
+  const handleSubmit = async (
+    e: React.FormEvent<HTMLFormElement>,
+  ): Promise<void> => {
     e.preventDefault();
     setLoading(true);
     setMessage("");
@@ -51,8 +41,9 @@ export default function NewPasswordPage() {
       return;
     }
 
-    const email = sessionStorage.getItem("resetEmail");
-    const token = sessionStorage.getItem("resetOtp");
+    // ambil data dari sessionStorage
+    const email = sessionStorage.getItem("resetEmail"); // Konsisten pakai resetEmail
+    const token = sessionStorage.getItem("resetOtp"); // Konsisten pakai resetOtp
 
     if (!email || !token) {
       setError("Sesi tidak valid. Silakan ulangi proses.");
@@ -65,12 +56,12 @@ export default function NewPasswordPage() {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
-          "x-api-key": BACKEND_TOKEN,
+          "x-api-key": BACKEND_TOKEN || "",
         },
-        body: JSON.stringify({ 
+        body: JSON.stringify({
           email: email,
           newPassword: newPassword,
-          token: token 
+          token: token, // otp token
         }),
       });
 
@@ -78,7 +69,8 @@ export default function NewPasswordPage() {
 
       if (res.ok) {
         setMessage(data.message || "Password berhasil direset! Silakan login.");
-        
+
+        // Bersihkan session storage
         sessionStorage.removeItem("resetEmail");
         sessionStorage.removeItem("resetOtp");
 
@@ -88,14 +80,8 @@ export default function NewPasswordPage() {
       } else {
         setError(data.message || "Gagal reset password, coba lagi.");
       }
-    } catch (err: unknown) { 
-      console.error("Reset Password Error:", err); 
-      
-      let errorMessage = "Terjadi kesalahan pada koneksi server.";
-      if (err instanceof Error) {
-        errorMessage = err.message;
-      }
-      setError(errorMessage);
+    } catch (err) {
+      setError("Terjadi kesalahan pada koneksi server.");
     } finally {
       setLoading(false);
     }
@@ -171,12 +157,20 @@ export default function NewPasswordPage() {
           />
 
           {message && (
-            <p className={`text-sm text-center font-inter font-semibold ${darkMode ? "text-green-400" : "text-green-600"}`}>
+            <p
+              className={`text-sm text-center font-inter font-semibold ${
+                darkMode ? "text-green-400" : "text-green-600"
+              }`}
+            >
               {message}
             </p>
           )}
           {error && (
-            <p className={`text-sm text-center font-inter font-semibold ${darkMode ? "text-red-300" : "text-red-600"}`}>
+            <p
+              className={`text-sm text-center font-inter font-semibold ${
+                darkMode ? "text-red-300" : "text-red-600"
+              }`}
+            >
               {error}
             </p>
           )}
@@ -195,7 +189,9 @@ export default function NewPasswordPage() {
             <a
               href="/forgotpassword"
               className={`hover:underline font-semibold transition-colors ${
-                darkMode ? "text-white hover:text-[#e53935]" : "text-[#1E1E1E] hover:text-[#e53935]"
+                darkMode
+                  ? "text-white hover:text-[#e53935]"
+                  : "text-[#1E1E1E] hover:text-[#e53935]"
               }`}
             >
               ← Kembali ke halaman lupa password
