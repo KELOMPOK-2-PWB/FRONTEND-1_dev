@@ -6,7 +6,7 @@ import { useRouter } from "next/navigation";
 const BASE_URL = process.env.NEXT_PUBLIC_BACKEND_URL;
 const BACKEND_TOKEN = process.env.NEXT_PUBLIC_BACKEND_TOKEN;
 
-export default function RegisterSellerPage() {
+export default function RegisterUserPage() {
   const router = useRouter();
   const [darkMode, setDarkMode] = useState(true);
   const [form, setForm] = useState({
@@ -17,57 +17,23 @@ export default function RegisterSellerPage() {
     phoneNumber: "",
   });
   const [loading, setLoading] = useState(false);
-  const [errors, setErrors] = useState<{ [key: string]: string }>({});
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const { name, value } = e.target;
-    setForm({ ...form, [name]: value });
-    if (errors[name]) {
-      setErrors({ ...errors, [name]: "" });
-    }
-  };
-
-  const validateForm = () => {
-    const newErrors: { [key: string]: string } = {};
-
-    if (!form.email.trim()) {
-      newErrors.email = "Email harus diisi";
-    } else if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(form.email)) {
-      newErrors.email = "Email tidak valid";
-    }
-
-    if (!form.username.trim()) {
-      newErrors.username = "Username harus diisi";
-    } else if (form.username.length < 3) {
-      newErrors.username = "Username minimal 3 karakter";
-    }
-
-    if (!form.password) {
-      newErrors.password = "Password harus diisi";
-    } else if (form.password.length < 6) {
-      newErrors.password = "Password minimal 6 karakter";
-    }
-
-    if (!form.confirmPassword) {
-      newErrors.confirmPassword = "Konfirmasi password harus diisi";
-    } else if (form.password !== form.confirmPassword) {
-      newErrors.confirmPassword = "Password dan konfirmasi password tidak sama";
-    }
-
-    if (!form.phoneNumber.trim()) {
-      newErrors.phoneNumber = "Nomor handphone harus diisi";
-    } else if (!/^\d{10,13}$/.test(form.phoneNumber.replace(/\D/g, ""))) {
-      newErrors.phoneNumber = "Nomor handphone tidak valid (10-13 digit)";
-    }
-
-    setErrors(newErrors);
-    return Object.keys(newErrors).length === 0;
+    setForm({
+      ...form,
+      [e.target.type === "password" &&
+      e.target.placeholder === "Konfirmasi Password"
+        ? "confirmPassword"
+        : e.target.name ||
+          e.target.placeholder.toLowerCase().replace(/\s+/g, "")]:
+        e.target.value,
+    });
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    
-    if (!validateForm()) {
+    if (form.password !== form.confirmPassword) {
+      alert("Password dan konfirmasi password tidak sama.");
       return;
     }
 
@@ -90,14 +56,13 @@ export default function RegisterSellerPage() {
       const data = await res.json();
 
       if (res.ok) {
-        // 🔹 UPDATE DISINI: Simpan Email DAN Role Seller
+        // ✅ Simpan email ke sessionStorage untuk digunakan di halaman OTP
         sessionStorage.setItem("userEmail", form.email);
-        sessionStorage.setItem("userRole", "seller"); // Set role seller
 
-        alert(data.message || "Registrasi berhasil!");
+        alert(data.message || "Registrasi seller berhasil!");
         router.push("/register/otp");
       } else {
-        alert(data.message || "Gagal melakukan registrasi");
+        alert(data.message || "Gagal melakukan registrasi seller");
       }
     } catch (err) {
       console.error(err);
@@ -124,6 +89,7 @@ export default function RegisterSellerPage() {
 
       {/* RIGHT SECTION */}
       <div className="flex flex-1 items-center justify-center relative w-full">
+        {/* Toggle Mode */}
         <button
           onClick={() => setDarkMode(!darkMode)}
           className={`absolute top-6 right-6 p-2 rounded-full transition duration-300 border ${
@@ -135,14 +101,15 @@ export default function RegisterSellerPage() {
           {darkMode ? "☀️" : "🌙"}
         </button>
 
+        {/* Form */}
         <form
           onSubmit={handleSubmit}
           className={`w-full max-w-md rounded-[10px] p-8 sm:p-10 shadow-[0_4px_20px_rgba(0,0,0,0.15)] flex flex-col gap-4 transition-all duration-300 ${
-            darkMode ? "bg-[#7A1F1F] text-white" : "bg-white text-[#1E1E1E]"
+            darkMode ? "bg-[#1E1E1E] text-white" : "bg-white text-[#1E1E1E]"
           }`}
         >
           <h2 className="text-center text-[1.8rem] font-bold font-inter">
-            Daftar Sebagai Seller
+            Daftar Sekarang
           </h2>
           <p className="text-center text-base font-medium mb-3 font-inter">
             Sudah punya akun Ashura?{" "}
@@ -153,7 +120,7 @@ export default function RegisterSellerPage() {
               Masuk
             </a>
           </p>
-          {/* Inputs */}
+
           <input
             type="email"
             name="email"
@@ -161,9 +128,9 @@ export default function RegisterSellerPage() {
             value={form.email}
             onChange={handleChange}
             required
-            className={`px-3 py-2 border rounded-md text-base outline-none font-inter focus:border-[#DADCE0] transition-colors duration-200 ${
+            className={`px-3 py-2 border rounded-md text-base outline-none font-inter focus:border-[#e53935] transition-colors duration-200 ${
               darkMode
-                ? "border-[#DADCE0] bg-[#FFFFFF] text-[#3C4043]"
+                ? "border-[#555] bg-[#2C2C2C] text-white"
                 : "border-[#DADCE0] text-[#3C4043]"
             }`}
           />
@@ -174,35 +141,35 @@ export default function RegisterSellerPage() {
             value={form.username}
             onChange={handleChange}
             required
-            className={`px-3 py-2 border rounded-md text-base outline-none font-inter focus:border-[#DADCE0] transition-colors duration-200 ${
+            className={`px-3 py-2 border rounded-md text-base outline-none font-inter focus:border-[#e53935] transition-colors duration-200 ${
               darkMode
-                ? "border-[#DADCE0] bg-[#FFFFFF] text-[#3C4043]"
+                ? "border-[#555] bg-[#2C2C2C] text-white"
                 : "border-[#DADCE0] text-[#3C4043]"
             }`}
           />
           <input
             type="password"
-            name="password"
             placeholder="Password"
             value={form.password}
-            onChange={handleChange}
+            onChange={(e) => setForm({ ...form, password: e.target.value })}
             required
-            className={`px-3 py-2 border rounded-md text-base outline-none font-inter focus:border-[#DADCE0] transition-colors duration-200 ${
+            className={`px-3 py-2 border rounded-md text-base outline-none font-inter focus:border-[#e53935] transition-colors duration-200 ${
               darkMode
-                ? "border-[#DADCE0] bg-[#FFFFFF] text-[#3C4043]"
+                ? "border-[#555] bg-[#2C2C2C] text-white"
                 : "border-[#DADCE0] text-[#3C4043]"
             }`}
           />
           <input
             type="password"
-            name="confirmPassword"
             placeholder="Konfirmasi Password"
             value={form.confirmPassword}
-            onChange={handleChange}
+            onChange={(e) =>
+              setForm({ ...form, confirmPassword: e.target.value })
+            }
             required
-            className={`px-3 py-2 border rounded-md text-base outline-none font-inter focus:border-[#DADCE0] transition-colors duration-200 ${
+            className={`px-3 py-2 border rounded-md text-base outline-none font-inter focus:border-[#e53935] transition-colors duration-200 ${
               darkMode
-                ? "border-[#DADCE0] bg-[#FFFFFF] text-[#3C4043]"
+                ? "border-[#555] bg-[#2C2C2C] text-white"
                 : "border-[#DADCE0] text-[#3C4043]"
             }`}
           />
@@ -213,9 +180,9 @@ export default function RegisterSellerPage() {
             value={form.phoneNumber}
             onChange={handleChange}
             required
-            className={`px-3 py-2 border rounded-md text-base outline-none font-inter focus:border-[#DADCE0] transition-colors duration-200 ${
+            className={`px-3 py-2 border rounded-md text-base outline-none font-inter focus:border-[#e53935] transition-colors duration-200 ${
               darkMode
-                ? "border-[#DADCE0] bg-[#FFFFFF] text-[#3C4043]"
+                ? "border-[#555] bg-[#2C2C2C] text-white"
                 : "border-[#DADCE0] text-[#3C4043]"
             }`}
           />
