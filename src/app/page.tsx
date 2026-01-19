@@ -175,6 +175,50 @@ export default function HomePage() {
     }
   };
 
+  // --- FUNGSI BELI SEKARANG ---
+  const handleBuyNow = async (productId: string) => {
+    const token = localStorage.getItem("authToken");
+    
+    if (!token) {
+      showModal("error", "Akses Ditolak", "Harap login terlebih dahulu untuk belanja!");
+      return;
+    }
+
+    // Opsi 1: Langsung redirect ke checkout (jika checkout mengambil semua item di cart)
+    // Tapi sebaiknya kita tambahkan dulu item ini ke cart agar masuk dalam checkout
+    setCartLoading(productId); // Gunakan loading yang sama
+
+    try {
+      // 1. Tambahkan ke Cart dulu
+      const res = await fetch(`${BASE_URL}/api/cart/addCart`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${token}`,
+          "x-auth-token": token || "",
+          "x-api-key": (BACKEND_TOKEN as string) || "",
+        },
+        body: JSON.stringify({
+          productId: productId,
+          quantity: 1, 
+        }),
+      });
+
+      if (res.ok) {
+        // 2. Jika sukses, langsung redirect ke checkout
+        router.push("/checkout");
+      } else {
+        const data = await res.json();
+        showModal("error", "Gagal", data.message || "Gagal memproses pembelian.");
+      }
+    } catch (err) {
+      console.error("Error buy now:", err);
+      showModal("error", "Error Koneksi", "Gagal menghubungi server.");
+    } finally {
+      setCartLoading(null);
+    }
+  };
+
   useEffect(() => {
     const checkAuthAndFetch = async () => {
       if (typeof window === "undefined") return;
@@ -354,7 +398,15 @@ export default function HomePage() {
                                             <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 3h2l.4 2M7 13h10l4-8H5.4M7 13L5.4 5M7 13l-2.293 2.293c-.63.63-.184 1.707.707 1.707H17m0 0a2 2 0 100 4 2 2 0 000-4zm-8 2a2 2 0 11-4 0 2 2 0 014 0z" /></svg>
                                         )}
                                     </button>
-                                    <button className={`flex-1 text-xs font-bold px-2 py-2 rounded transition-colors ${darkMode ? "bg-white hover:bg-gray-200 text-black" : "bg-black hover:bg-gray-800 text-white"}`}>Beli Sekarang</button>
+                                    <button 
+                                      onClick={(e) => { 
+                                        e.stopPropagation(); 
+                                        handleBuyNow(p._id); 
+                                      }}
+                                      className={`flex-1 text-xs font-bold px-2 py-2 rounded transition-colors ${darkMode ? "bg-white hover:bg-gray-200 text-black" : "bg-black hover:bg-gray-800 text-white"}`}
+                                    >
+                                      Beli Sekarang
+                                    </button>
                                 </div>
                             </div>
                         </div>

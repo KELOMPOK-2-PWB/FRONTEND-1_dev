@@ -5,17 +5,38 @@ import { useRouter } from "next/navigation";
 import Navbar from "../../component/Element/Navbar";
 import Cropper from "react-easy-crop";
 import { motion, AnimatePresence, Variants } from "framer-motion";
+import axios from "axios";
 
-// --- FIX BUILD ERROR: MANUAL TYPE DEFINITION ---
+// --- TYPE DEFINITIONS ---
 type Point = { x: number; y: number };
 type Area = { width: number; height: number; x: number; y: number };
 
-// --- KONFIGURASI API
+// --- KONFIGURASI API ---
 const BASE_URL = process.env.NEXT_PUBLIC_BACKEND_URL;
 const BACKEND_TOKEN = process.env.NEXT_PUBLIC_BACKEND_TOKEN;
+const UPLOADER_BASE_URL = process.env.NEXT_PUBLIC_UPLOAD_BASE;
+const UPLOADER_API_KEY = process.env.NEXT_PUBLIC_UPLOAD_APIKEY;
+
+// --- AXIOS INSTANCE ---
+const api = axios.create({
+  baseURL: BASE_URL,
+  headers: {
+    "Content-Type": "application/json",
+    "x-api-key": BACKEND_TOKEN || "",
+  },
+});
+
+// Helper Auth Token
+const setAuthToken = (token: string | null) => {
+  if (token) {
+    api.defaults.headers.common["Authorization"] = `Bearer ${token}`;
+  } else {
+    delete api.defaults.headers.common["Authorization"];
+  }
+};
 
 // ============================================================================
-// 1. STRICT TYPES DEFINITION
+// 1. INTERFACES (LENGKAP)
 // ============================================================================
 
 interface Address {
@@ -52,18 +73,58 @@ interface AddressPayload {
   country?: string;
 }
 
-interface BackendError {
-  message?: string;
-  error?: string;
+// --- Order & Review Interfaces ---
+interface ProductItem {
+    _id: string;
+    id?: string;
+    name: string;
+    price: number;
+    images: string[];
+    dropStatus?: string;
 }
 
-interface UploadResponse {
-  url?: string;
-  image?: string;
-  data?: { url: string };
+interface OrderItem {
+    _id: string;
+    product: ProductItem;
+    quantity: number;
+    price: number;
+    seller?: string;
+}
+
+interface OrderHistory {
+    _id: string;
+    uniqueCode: string;
+    status: string;
+    totalPrice: number;
+    itemsPrice?: number;
+    createdAt: string;
+    items: OrderItem[];
+    courier?: string;
+    trackingNumber?: string;
+    resiOrder?: string;
+}
+
+// Data untuk Modal Review
+interface ReviewData {
+    productId: string;
+    productName: string;
+    productImage: string;
+    orderId: string;
+}
+
+// Upload Response
+interface ExternalUploadResponse {
+  status: boolean;
+  result: {
+    url: string;
+    filename: string;
+    mimetype: string;
+    size: number;
+  };
   message?: string;
 }
 
+// Props Components
 interface TabProps {
   showModal: (
     type: "success" | "error" | "confirm",
@@ -92,81 +153,29 @@ interface RowDataProps {
 }
 
 // ============================================================================
-// 2. HELPER FUNCTIONS & STRICT FETCH
+// 2. HELPER FUNCTIONS
 // ============================================================================
 
 function getErrorMessage(error: unknown): string {
-  if (error instanceof Error) return error.message;
-  if (typeof error === "string") return error;
-  if (typeof error === "object" && error !== null && "message" in error) {
-    return String((error as { message: unknown }).message);
+  if (axios.isAxiosError(error)) {
+    return error.response?.data?.message || error.response?.data?.error || error.message;
   }
+  if (error instanceof Error) return error.message;
   return "Terjadi kesalahan yang tidak diketahui";
 }
 
-// Fix URL Protocol (HTTPS)
-function formatUrl(endpoint: string): string {
-  // Handle jika BASE_URL undefined
-  let baseUrl = (BASE_URL || "").trim();
-  
-  if (!baseUrl) return endpoint;
-  if (!baseUrl.startsWith("http")) {
-    baseUrl = `https://${baseUrl}`;
-  }
-  if (baseUrl.endsWith("/")) {
-    baseUrl = baseUrl.slice(0, -1);
-  }
-  const cleanEndpoint = endpoint.startsWith("/") ? endpoint : `/${endpoint}`;
-  return `${baseUrl}${cleanEndpoint}`;
-}
+const formatRupiah = (num: number) => {
+    return new Intl.NumberFormat("id-ID", {
+      style: "currency",
+      currency: "IDR",
+      maximumFractionDigits: 0,
+    }).format(num);
+};
 
-// Fetch Wrapper Strictly Typed
-async function fetchAPI<T>(
-  endpoint: string,
-  method: string,
-  body?: unknown,
-  token?: string
-): Promise<{ ok: boolean; status: number; data: T | null }> {
-  const headers: Record<string, string> = {
-    "Content-Type": "application/json",
-    "x-api-key": (BACKEND_TOKEN as string) || "", // Casting agar aman di TS
-  };
-  if (token) headers["Authorization"] = `Bearer ${token}`;
-
-  const fullUrl = formatUrl(endpoint);
-
-  try {
-    const res = await fetch(fullUrl, {
-      method,
-      headers,
-      body: body ? JSON.stringify(body) : undefined,
-    });
-
-    const text = await res.text();
-    let data: unknown = null;
-
-    if (text.trim().startsWith("<")) {
-      console.error(`❌ HTML Error dari ${fullUrl}`);
-      throw new Error(`Server Error (${res.status}): Backend error.`);
-    }
-
-    try {
-      data = text ? JSON.parse(text) : null;
-    } catch {
-      throw new Error("Format respon server tidak valid (bukan JSON).");
-    }
-
-    if (!res.ok) {
-      const errObj = data as BackendError;
-      const msg = errObj?.message || errObj?.error || `Request gagal (${res.status})`;
-      throw new Error(msg);
-    }
-
-    return { ok: res.ok, status: res.status, data: data as T };
-  } catch (error) {
-    throw new Error(getErrorMessage(error));
-  }
-}
+const formatDate = (dateString: string) => {
+    const options: Intl.DateTimeFormatOptions = { day: 'numeric', month: 'short', year: 'numeric' };
+    return new Date(dateString).toLocaleDateString('id-ID', options);
+};
 
 type TabKey = "profil" | "pesanan" | "alamat" | "password";
 const TABS: { key: TabKey; label: string }[] = [
@@ -177,7 +186,7 @@ const TABS: { key: TabKey; label: string }[] = [
 ];
 
 // ============================================================================
-// 3. KOMPONEN UI UTAMA
+// 3. KOMPONEN UI UTAMA (PARENT)
 // ============================================================================
 
 function CustomModal({ isOpen, type, title, message, onConfirm, onCancel }: ModalProps) {
@@ -237,6 +246,9 @@ function CustomModal({ isOpen, type, title, message, onConfirm, onCancel }: Moda
 export default function UserProfilePage() {
   const router = useRouter();
   const [activeTab, setActiveTab] = useState<TabKey>("profil");
+  
+  // State untuk mencegah redirect sebelum token dicek
+  const [isAuthChecked, setIsAuthChecked] = useState(false);
 
   const [modalConfig, setModalConfig] = useState<ModalProps>({
     isOpen: false,
@@ -261,9 +273,13 @@ export default function UserProfilePage() {
   };
 
   useEffect(() => {
+    // Cek token saat komponen mount (Client Side)
     const token = localStorage.getItem("authToken");
     if (!token) {
-      router.push("/login/users");
+      router.replace("/login/users"); 
+    } else {
+      setAuthToken(token); 
+      setIsAuthChecked(true); // Token siap, render halaman
     }
   }, [router]);
 
@@ -276,6 +292,18 @@ export default function UserProfilePage() {
     visible: { opacity: 1, x: 0, transition: { duration: 0.3, ease: "easeInOut" } },
     exit: { opacity: 0, x: 20, transition: { duration: 0.2, ease: "easeInOut" } },
   };
+
+  // Loading Screen sebelum token dicek (Mencegah kick logout saat refresh)
+  if (!isAuthChecked) {
+    return (
+      <div className="min-h-screen bg-[#4F0F0F] flex items-center justify-center text-white">
+        <div className="flex flex-col items-center gap-3">
+            <div className="w-8 h-8 border-4 border-red-500 border-t-transparent rounded-full animate-spin"></div>
+            <p className="text-sm font-mono text-red-200">Memuat Profil...</p>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="min-h-screen bg-[#4F0F0F] font-sans text-white pb-20">
@@ -322,7 +350,8 @@ export default function UserProfilePage() {
               exit="exit"
               className="w-full"
             >
-              {activeTab === "pesanan" && <PesananTab />}
+              {activeTab === "pesanan" && <PesananTab showModal={showModal} />}
+              
               {activeTab === "alamat" && (
                 <AlamatTab showModal={showModal} closeModal={closeModal} />
               )}
@@ -345,66 +374,303 @@ export default function UserProfilePage() {
 }
 
 // ============================================================================
-// 4. TAB: PESANAN
+// 4. TAB: PESANAN (RIWAYAT + KONFIRMASI + REVIEW MODAL)
 // ============================================================================
-function PesananTab() {
-  const orders = [
-    { id: "ORD-8821", date: "12 Nov 2023", status: "Selesai", price: 150000 },
-    { id: "ORD-9932", date: "15 Nov 2023", status: "Dikirim", price: 75000 },
-  ];
+function PesananTab({ showModal }: { showModal: TabProps["showModal"] }) {
+  const [orders, setOrders] = useState<OrderHistory[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [processingId, setProcessingId] = useState<string | null>(null);
+
+  // --- STATE MODAL REVIEW ---
+  const [reviewModalOpen, setReviewModalOpen] = useState(false);
+  const [selectedProduct, setSelectedProduct] = useState<ReviewData | null>(null);
+  const [rating, setRating] = useState(5);
+  const [comment, setComment] = useState("");
+  const [submittingReview, setSubmittingReview] = useState(false);
+
+  // Helper untuk Status Warna
+  const getStatusBadge = (status: string) => {
+    switch (status.toLowerCase()) {
+      case 'completed':
+      case 'selesai':
+        return "bg-green-900/50 text-green-300 border-green-700";
+      case 'waiting_verification':
+      case 'menunggu_verifikasi':
+        return "bg-yellow-900/50 text-yellow-300 border-yellow-700";
+      case 'cancelled':
+      case 'batal':
+        return "bg-red-900/50 text-red-300 border-red-700";
+      case 'sent':
+      case 'dikirim':
+        return "bg-blue-900/50 text-blue-300 border-blue-700";
+      default:
+        return "bg-gray-800 text-gray-300 border-gray-600";
+    }
+  };
+
+  const fetchOrders = async () => {
+    setLoading(true);
+    try {
+      const response = await api.get("/api/orders/myOrder");
+      const data = response.data;
+      
+      if (data && Array.isArray(data.data)) {
+        setOrders(data.data);
+      } else if (Array.isArray(data)) {
+        setOrders(data);
+      }
+    } catch (error) {
+      console.error("Gagal mengambil riwayat pesanan:", error);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    fetchOrders();
+  }, []);
+
+  // --- ACTION: TERIMA BARANG ---
+  const handleConfirmClick = (orderId: string) => {
+    showModal(
+      "confirm",
+      "Terima Barang?",
+      "Pastikan barang sudah Anda terima dengan kondisi baik. Tindakan ini akan menyelesaikan pesanan.",
+      () => processCompleteOrder(orderId)
+    );
+  };
+
+  const processCompleteOrder = async (orderId: string) => {
+    setProcessingId(orderId);
+    try {
+      const response = await api.put(`/api/orders/${orderId}/complete`);
+      
+      if (response.status >= 200 && response.status < 300) {
+        showModal(
+            "success", 
+            "Pesanan Selesai", 
+            response.data?.message || "Terima kasih! Pesanan telah diselesaikan.", 
+            () => {}
+        );
+        fetchOrders(); 
+      }
+    } catch (err) {
+      showModal("error", "Gagal", getErrorMessage(err), () => {});
+    } finally {
+      setProcessingId(null);
+    }
+  };
+
+  // --- ACTION: BUKA MODAL REVIEW ---
+  const openReviewModal = (productData: ReviewData) => {
+    setSelectedProduct(productData);
+    setRating(5);
+    setComment("");
+    setReviewModalOpen(true);
+  };
+
+  // --- ACTION: SUBMIT REVIEW ---
+  const handleSubmitReview = async () => {
+    if (!selectedProduct) return;
+    setSubmittingReview(true);
+
+    try {
+        // API POST REVIEW
+        await api.post(`/api/reviews/${selectedProduct.productId}`, {
+            rating: Number(rating),
+            comment: comment
+        });
+
+        setReviewModalOpen(false); // Tutup modal
+        showModal("success", "Terima Kasih!", "Ulasan Anda telah berhasil dikirim.", () => {});
+    } catch (e) {
+        showModal("error", "Gagal", getErrorMessage(e), () => {});
+    } finally {
+        setSubmittingReview(false);
+    }
+  };
 
   return (
-    <div>
-      <h2 className="text-2xl font-bold mb-6 border-b border-[#7a1f1f] pb-4 flex items-center gap-2 text-red-100">
-        Riwayat Pesanan
-      </h2>
-      <div className="w-full overflow-x-auto bg-[#2a0505] rounded-lg border border-[#3f0e0e]">
-        <table className="w-full text-left text-sm">
-          <thead className="bg-[#3f0e0e] text-red-200 font-bold uppercase tracking-wider">
-            <tr>
-              <th className="px-6 py-4">ID Pesanan</th>
-              <th className="px-6 py-4">Tanggal</th>
-              <th className="px-6 py-4">Status</th>
-              <th className="px-6 py-4 text-right">Total</th>
-            </tr>
-          </thead>
-          <tbody className="divide-y divide-[#5c1010]">
-            {orders.length > 0 ? (
-              orders.map((order) => (
-                <tr key={order.id} className="hover:bg-[#4a1212] transition-colors">
-                  <td className="px-6 py-4 font-mono text-white font-bold">{order.id}</td>
-                  <td className="px-6 py-4 text-gray-300">{order.date}</td>
-                  <td className="px-6 py-4">
-                    <span className={`px-3 py-1 rounded-full text-xs font-bold ${
-                        order.status === "Selesai"
-                          ? "bg-green-900/50 text-green-300 border border-green-700"
-                          : "bg-blue-900/50 text-blue-300 border border-blue-700"
-                      }`}
-                    >
-                      {order.status}
-                    </span>
-                  </td>
-                  <td className="px-6 py-4 text-right font-bold text-[#E53935]">
-                    Rp {order.price.toLocaleString()}
+    <>
+      <div>
+        <h2 className="text-2xl font-bold mb-6 border-b border-[#7a1f1f] pb-4 flex items-center gap-2 text-red-100">
+          Riwayat Pesanan
+        </h2>
+        <div className="w-full overflow-x-auto bg-[#2a0505] rounded-lg border border-[#3f0e0e]">
+          <table className="w-full text-left text-sm">
+            <thead className="bg-[#3f0e0e] text-red-200 font-bold uppercase tracking-wider">
+              <tr>
+                <th className="px-6 py-4">Produk & Info</th>
+                <th className="px-6 py-4">Status</th>
+                <th className="px-6 py-4 text-right">Total</th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-[#5c1010]">
+              {loading && orders.length === 0 ? (
+                  <tr>
+                      <td colSpan={3} className="px-6 py-12 text-center text-gray-400">
+                          <div className="flex justify-center items-center gap-2">
+                              <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
+                              Memuat pesanan...
+                          </div>
+                      </td>
+                  </tr>
+              ) : orders.length > 0 ? (
+                orders.map((order) => {
+                  const displayTotal = order.totalPrice > 0 
+                      ? order.totalPrice 
+                      : order.items.reduce((acc, item) => acc + (item.price * item.quantity), 0);
+
+                  const resi = order.trackingNumber || order.resiOrder;
+                  const firstItem = order.items[0];
+                  const productName = firstItem?.product?.name || "Produk";
+                  const productImage = firstItem?.product?.images?.[0] || null;
+                  const productId = firstItem?.product?._id || firstItem?.product?.id; 
+                  
+                  const isSent = order.status.toLowerCase() === "sent";
+                  const isCompleted = order.status.toLowerCase() === "completed" || order.status.toLowerCase() === "selesai";
+
+                  // Data untuk modal review
+                  const reviewData: ReviewData = {
+                      productId: productId || "",
+                      productName: productName,
+                      productImage: productImage || "",
+                      orderId: order._id
+                  };
+
+                  return (
+                      <tr key={order._id} className="hover:bg-[#4a1212] transition-colors">
+                          <td className="px-6 py-4">
+                              <div className="flex items-center gap-3">
+                                  {productImage && (
+                                      <div className="w-12 h-12 bg-black rounded-md overflow-hidden border border-[#5c1010] flex-shrink-0">
+                                          <img src={productImage} alt={productName} className="w-full h-full object-cover" />
+                                      </div>
+                                  )}
+                                  <div>
+                                      <div className="font-bold text-white text-sm">
+                                          {productName} 
+                                      </div>
+                                      <div className="text-[11px] text-gray-400 font-mono mt-0.5">
+                                          {order.uniqueCode}
+                                      </div>
+                                      {resi && (
+                                          <div className="text-[10px] text-gray-300 mt-1 flex gap-2">
+                                              {order.courier && <span className="bg-[#3f0e0e] px-1 rounded">{order.courier}</span>}
+                                              <span className="font-mono text-yellow-500/80">Resi: {resi}</span>
+                                          </div>
+                                      )}
+                                  </div>
+                              </div>
+                          </td>
+                          <td className="px-6 py-4">
+                              <div className="flex flex-col items-start gap-2">
+                                  <span className={`px-2 py-1 rounded text-xs font-bold border ${getStatusBadge(order.status)}`}>
+                                  {order.status.replace(/_/g, " ")}
+                                  </span>
+                                  
+                                  {/* Tombol Terima Barang */}
+                                  {isSent && (
+                                      <button 
+                                          onClick={() => handleConfirmClick(order._id)}
+                                          disabled={processingId === order._id}
+                                          className="bg-green-600 hover:bg-green-700 text-white text-[10px] font-bold px-3 py-1 rounded shadow-lg flex items-center gap-1 transition-all"
+                                      >
+                                          {processingId === order._id ? (
+                                              <>
+                                                  <div className="w-2 h-2 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
+                                                  Proses...
+                                              </>
+                                          ) : (
+                                              "Diterima?"
+                                          )}
+                                      </button>
+                                  )}
+
+                                  {/* Tombol Review (Muncul Modal) */}
+                                  {isCompleted && productId && (
+                                      <button 
+                                          onClick={() => openReviewModal(reviewData)}
+                                          className="bg-yellow-600 hover:bg-yellow-700 text-white text-[10px] font-bold px-3 py-1 rounded shadow-lg flex items-center gap-1 transition-all"
+                                      >
+                                          ★ Beri Ulasan
+                                      </button>
+                                  )}
+                              </div>
+                          </td>
+                          <td className="px-6 py-4 text-right font-bold text-[#E53935]">
+                              {formatRupiah(displayTotal)}
+                          </td>
+                      </tr>
+                  );
+                })
+              ) : (
+                <tr>
+                  <td colSpan={3} className="px-6 py-12 text-center text-gray-400 italic">
+                    Belum ada riwayat pesanan.
                   </td>
                 </tr>
-              ))
-            ) : (
-              <tr>
-                <td colSpan={4} className="px-6 py-12 text-center text-gray-400 italic">
-                  Belum ada riwayat pesanan.
-                </td>
-              </tr>
-            )}
-          </tbody>
-        </table>
+              )}
+            </tbody>
+          </table>
+        </div>
       </div>
-    </div>
+
+      {/* 🔥 MODAL REVIEW (POPUP) 🔥 */}
+      {reviewModalOpen && selectedProduct && (
+        <div className="fixed inset-0 z-[200] flex items-center justify-center p-4">
+            <div className="absolute inset-0 bg-black/90 backdrop-blur-sm" onClick={() => setReviewModalOpen(false)}></div>
+            
+            <div className="bg-[#1E1E1E] w-full max-w-md rounded-xl border border-[#5c1010] p-6 relative z-10 animate-fadeIn shadow-2xl">
+                <button 
+                    onClick={() => setReviewModalOpen(false)}
+                    className="absolute top-4 right-4 text-gray-400 hover:text-white"
+                >✕</button>
+                
+                <div className="text-center mb-6">
+                    <h3 className="text-xl font-bold text-white mb-1">Beri Ulasan</h3>
+                    <p className="text-xs text-gray-400">untuk {selectedProduct.productName}</p>
+                </div>
+
+                <div className="flex justify-center gap-2 mb-6">
+                    {[1, 2, 3, 4, 5].map((star) => (
+                        <button 
+                            key={star} 
+                            onClick={() => setRating(star)} 
+                            className={`text-3xl transition transform hover:scale-110 ${star <= rating ? "text-yellow-400" : "text-gray-600"}`}
+                        >
+                            ★
+                        </button>
+                    ))}
+                </div>
+
+                <div className="mb-6">
+                    <textarea 
+                        rows={3} 
+                        className="w-full bg-[#2a0505] border border-[#5c1010] rounded-lg p-3 text-white focus:border-[#E53935] outline-none placeholder-gray-500"
+                        placeholder="Tulis pendapat Anda tentang produk ini..."
+                        value={comment}
+                        onChange={(e) => setComment(e.target.value)}
+                    />
+                </div>
+
+                <button 
+                    onClick={handleSubmitReview}
+                    disabled={submittingReview}
+                    className="w-full bg-[#E53935] hover:bg-[#d32f2f] text-white font-bold py-3 rounded-lg shadow-lg disabled:opacity-50 disabled:cursor-not-allowed flex justify-center items-center gap-2"
+                >
+                    {submittingReview && <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin"></div>}
+                    {submittingReview ? "Mengirim..." : "Kirim Ulasan"}
+                </button>
+            </div>
+        </div>
+      )}
+    </>
   );
 }
 
 // ============================================================================
-// 5. TAB: ALAMAT
+// 5. TAB: ALAMAT (FULL CODE RESTORED)
 // ============================================================================
 function AlamatTab({ showModal, closeModal }: TabProps) {
   const [alamatList, setAlamatList] = useState<Address[]>([]);
@@ -423,22 +689,16 @@ function AlamatTab({ showModal, closeModal }: TabProps) {
   });
 
   const fetchAlamat = async () => {
-    const token = localStorage.getItem("authToken");
-    if (!token) return;
     try {
-      const { data, ok } = await fetchAPI<Address[] | { data: Address[] }>(
-        "/api/users/address",
-        "GET",
-        null,
-        token
-      );
+      const response = await api.get("/api/users/address");
+      const data = response.data;
 
-      if (ok && data) {
+      if (data) {
         let list: Address[] = [];
         if (Array.isArray(data)) {
           list = data;
-        } else if ('data' in data && Array.isArray(data.data)) {
-          list = data.data;
+        } else if ((data as any).data && Array.isArray((data as any).data)) {
+          list = (data as any).data;
         }
         setAlamatList(list);
       }
@@ -452,13 +712,11 @@ function AlamatTab({ showModal, closeModal }: TabProps) {
   }, []);
 
   const handleSubmit = async () => {
-    const token = localStorage.getItem("authToken");
-    if (!token) return;
     setLoading(true);
 
     try {
       const url = editMode ? `/api/users/address/${editMode}` : "/api/users/address";
-      const method = editMode ? "PUT" : "POST";
+      const method = editMode ? "put" : "post";
 
       const payload: AddressPayload = {
         street: formAddr.street,
@@ -470,9 +728,9 @@ function AlamatTab({ showModal, closeModal }: TabProps) {
         country: formAddr.country || "Indonesia",
       };
 
-      const { ok } = await fetchAPI<Address>(url, method, payload, token);
+      const response = await (api as any)[method](url, payload);
 
-      if (ok) {
+      if (response.status >= 200 && response.status < 300) {
         showModal(
           "success",
           "Berhasil",
@@ -516,11 +774,9 @@ function AlamatTab({ showModal, closeModal }: TabProps) {
   };
 
   const handleDeleteConfirm = async (id: string) => {
-    const token = localStorage.getItem("authToken");
-    if (!token) return;
     try {
-      const { ok } = await fetchAPI<{ message: string }>(`/api/users/address/${id}`, "DELETE", null, token);
-      if (ok) {
+      const response = await api.delete(`/api/users/address/${id}`);
+      if (response.status >= 200 && response.status < 300) {
         fetchAlamat();
         showModal("success", "Berhasil", "Alamat dihapus!", () => {});
       }
@@ -627,7 +883,7 @@ function AlamatTab({ showModal, closeModal }: TabProps) {
 }
 
 // ============================================================================
-// 6. TAB: PROFIL
+// 6. TAB: PROFIL (FULL CODE RESTORED)
 // ============================================================================
 function ProfilTab({ onSwitchToPassword, showModal, closeModal }: TabProps) {
   const router = useRouter();
@@ -656,26 +912,13 @@ function ProfilTab({ onSwitchToPassword, showModal, closeModal }: TabProps) {
   const [croppedAreaPixels, setCroppedAreaPixels] = useState<Area | null>(null);
   const [showCropper, setShowCropper] = useState(false);
 
-  // --- FETCH PROFILE (STRICT MAPPING) ---
+  // --- FETCH PROFILE ---
   const fetchProfile = async () => {
-    const token = localStorage.getItem("authToken");
-    if (!token) return;
-
     try {
-      const { data, ok, status } = await fetchAPI<UserProfile>(
-        "/api/users/profile",
-        "GET",
-        null,
-        token
-      );
+      const response = await api.get<UserProfile>("/api/users/profile");
+      const data = response.data;
 
-      if (status === 401) {
-        localStorage.clear();
-        router.push("/login/users");
-        return;
-      }
-
-      if (ok && data) {
+      if (data) {
         const user = data;
 
         let validAvatar = user.avatar;
@@ -706,8 +949,13 @@ function ProfilTab({ onSwitchToPassword, showModal, closeModal }: TabProps) {
             setAvatarPreview(null);
         }
       }
-    } catch (e) {
-      console.error("Gagal mengambil data profil:", getErrorMessage(e));
+    } catch (e: any) {
+        if (e.response && (e.response.status === 401 || e.response.status === 403)) {
+            localStorage.removeItem("authToken");
+            router.push("/login/users");
+            return;
+        }
+        console.error("Gagal mengambil data profil:", getErrorMessage(e));
     }
   };
 
@@ -725,9 +973,6 @@ function ProfilTab({ onSwitchToPassword, showModal, closeModal }: TabProps) {
   };
 
   const handleUpdateProfile = async () => {
-    const token = localStorage.getItem("authToken");
-    if (!token) return;
-
     try {
       const body = {
         name: formData.name,
@@ -736,14 +981,9 @@ function ProfilTab({ onSwitchToPassword, showModal, closeModal }: TabProps) {
         avatar: avatarPreview || undefined,
       };
 
-      const { ok } = await fetchAPI<UserProfile>(
-        "/api/users/profile",
-        "PUT",
-        body,
-        token
-      );
+      const response = await api.put<UserProfile>("/api/users/profile", body);
 
-      if (ok) {
+      if (response.status >= 200 && response.status < 300) {
         setProfileData(prev => ({ ...prev, ...body, email: prev.email })); 
         showModal("success", "Berhasil", "Data profil berhasil disimpan!", () => {
            setModalType(null);
@@ -755,27 +995,21 @@ function ProfilTab({ onSwitchToPassword, showModal, closeModal }: TabProps) {
   };
 
   const handleDeleteAccount = async () => {
-    const token = localStorage.getItem("authToken");
-    if (!token) return;
-
     if (!deleteForm.email || !deleteForm.password) {
       showModal("error", "Peringatan", "Isi email dan password konfirmasi.", () => {});
       return;
     }
 
     try {
-      const { ok, data } = await fetchAPI<{ message: string }>(
-        "/api/users/profile",
-        "DELETE",
-        { email: deleteForm.email, password: deleteForm.password },
-        token
-      );
+      const response = await api.delete<{ message: string }>("/api/users/profile", {
+          data: { email: deleteForm.email, password: deleteForm.password }
+      });
 
-      if (ok) {
+      if (response.status >= 200 && response.status < 300) {
         showModal(
           "success",
           "Akun Dihapus",
-          data?.message || "Akun Anda telah berhasil dihapus.",
+          response.data?.message || "Akun Anda telah berhasil dihapus.",
           () => {
             localStorage.clear();
             router.push("/login/users");
@@ -788,19 +1022,12 @@ function ProfilTab({ onSwitchToPassword, showModal, closeModal }: TabProps) {
   };
 
   const handleRequestEmail = async () => {
-    const token = localStorage.getItem("authToken");
-    if (!token) return;
     try {
-      const { ok, data } = await fetchAPI<{ message: string }>(
-        "/api/users/request-email-update",
-        "POST",
-        { newEmail },
-        token
-      );
+      const response = await api.post<{ message: string }>("/api/users/request-email-update", { newEmail });
 
-      if (ok) {
+      if (response.status >= 200 && response.status < 300) {
         setOtpSent(true);
-        showModal("success", "OTP Terkirim", data?.message || "Cek email Anda.", () => {});
+        showModal("success", "OTP Terkirim", response.data?.message || "Cek email Anda.", () => {});
       }
     } catch (e) {
       showModal("error", "Error", getErrorMessage(e), () => {});
@@ -808,17 +1035,10 @@ function ProfilTab({ onSwitchToPassword, showModal, closeModal }: TabProps) {
   };
 
   const handleVerifyEmail = async () => {
-    const token = localStorage.getItem("authToken");
-    if (!token) return;
     try {
-      const { ok, data } = await fetchAPI<{ message: string }>(
-        "/api/users/verify-email-update",
-        "POST",
-        { otp: otpCode },
-        token
-      );
+      const response = await api.post<{ message: string }>("/api/users/verify-email-update", { otp: otpCode });
 
-      if (ok) {
+      if (response.status >= 200 && response.status < 300) {
         showModal("success", "Berhasil", "Email berhasil diubah!", () => {
           window.location.reload();
         });
@@ -841,6 +1061,7 @@ function ProfilTab({ onSwitchToPassword, showModal, closeModal }: TabProps) {
     }
   };
 
+  // --- 🔥 UPLOADER EXTERNAL LOGIC ---
   const handleSaveCrop = async () => {
     if (!cropImageSrc || !croppedAreaPixels) return;
     setUploading(true);
@@ -849,52 +1070,45 @@ function ProfilTab({ onSwitchToPassword, showModal, closeModal }: TabProps) {
       const croppedImageBase64 = await getCroppedImg(cropImageSrc, croppedAreaPixels);
       if (!croppedImageBase64) throw new Error("Gagal crop gambar");
 
-      const token = localStorage.getItem("authToken");
       const file = dataURLtoFile(croppedImageBase64, "avatar.jpg");
       const formDataUpload = new FormData();
       formDataUpload.append("image", file);
 
-      const uploadUrl = formatUrl(`/api/proxy/features/upload?apikey=${BACKEND_TOKEN}`);
+      // Gunakan URL dari Env atau Hardcode
+      const uploadUrl = new URL(UPLOADER_BASE_URL || "");
+      if (UPLOADER_API_KEY) {
+        uploadUrl.searchParams.append("apikey", UPLOADER_API_KEY);
+      }
 
-      const uploadRes = await fetch(uploadUrl, {
-        method: "POST",
-        headers: {
-          Authorization: `Bearer ${token}`,
-        },
-        body: formDataUpload,
+      // External Request using axios without interceptors
+      const uploadRes = await axios.post<ExternalUploadResponse>(uploadUrl.toString(), formDataUpload, {
+          headers: { "Content-Type": "multipart/form-data" }
       });
 
-      const text = await uploadRes.text();
-      let upData: UploadResponse;
-      try {
-        upData = text ? JSON.parse(text) : {};
-      } catch {
-        throw new Error("Gagal Upload: Respon server proxy tidak valid.");
+      const externalData = uploadRes.data;
+
+      // Logic parsing url dari response uploader
+      const newUrl = externalData.result?.url || (externalData as any).url;
+
+      if (!newUrl) {
+          throw new Error(externalData.message || "Gagal upload gambar.");
       }
 
-      const newUrl = upData.url || upData.data?.url || upData.image;
+      const updateRes = await api.put<UserProfile>("/api/users/profile", { avatar: newUrl });
 
-      if (!uploadRes.ok || !newUrl) {
-          throw new Error(upData.message || "Gagal upload gambar.");
-      }
-
-      const updateRes = await fetchAPI<UserProfile>(
-        "/api/users/profile",
-        "PUT",
-        { avatar: newUrl },
-        token || ""
-      );
-
-      if (updateRes.ok) {
-          setAvatarPreview(newUrl);
+      if (updateRes.status >= 200 && updateRes.status < 300) {
+           setAvatarPreview(newUrl);
           localStorage.setItem("my_custom_avatar", newUrl);
-          
-          showModal(
-            "success",
-            "Berhasil",
-            "Foto profil berhasil diperbarui!",
-            () => setShowCropper(false)
-          );
+          setShowCropper(false);
+          setCropImageSrc(null);
+          setTimeout(() => {
+            showModal(
+              "success",
+              "Berhasil",
+              "Foto profil berhasil diperbarui!",
+              () => {},
+            );
+          }, 150);
       }
     } catch (e: unknown) {
       showModal("error", "Gagal", getErrorMessage(e), () => {});
@@ -953,7 +1167,6 @@ function ProfilTab({ onSwitchToPassword, showModal, closeModal }: TabProps) {
                 <button onClick={handleUpdateProfile} className="w-full bg-[#E53935] hover:bg-[#d32f2f] text-white font-bold py-3 rounded-lg">Simpan</button>
               </>
             )}
-            {/* Modal bagian lain (username, hp, email, delete) serupa strukturnya */}
             {modalType === "username" && (
               <>
                 <h4 className="text-xl font-bold mb-4">Ubah Username</h4>
@@ -1036,6 +1249,9 @@ function RowData({ label, value, onEdit }: RowDataProps) {
   );
 }
 
+// ============================================================================
+// 7. TAB: PASSWORD
+// ============================================================================
 function PasswordTab({ showModal, closeModal }: { showModal: TabProps["showModal"], closeModal: TabProps["closeModal"] }) {
   const [formPw, setFormPw] = useState({ currentPassword: "", newPassword: "", confirmPassword: "" });
   const [loading, setLoading] = useState(false);
@@ -1047,20 +1263,16 @@ function PasswordTab({ showModal, closeModal }: { showModal: TabProps["showModal
       return;
     }
 
-    const token = localStorage.getItem("authToken");
-    if (!token) return;
     setLoading(true);
 
     try {
-      const { ok, data } = await fetchAPI<{ message: string }>(
-        "/api/users/change-password",
-        "PUT",
-        { currentPassword: formPw.currentPassword, newPassword: formPw.newPassword },
-        token
-      );
+      const response = await api.put<{ message: string }>("/api/users/change-password", {
+          currentPassword: formPw.currentPassword,
+          newPassword: formPw.newPassword
+      });
 
-      if (ok) {
-        showModal("success", "Berhasil", data?.message || "Password berhasil diubah!", () => {});
+      if (response.status >= 200 && response.status < 300) {
+        showModal("success", "Berhasil", response.data?.message || "Password berhasil diubah!", () => {});
         setFormPw({ currentPassword: "", newPassword: "", confirmPassword: "" });
       }
     } catch (e) {
@@ -1095,7 +1307,7 @@ const createImage = (url: string): Promise<HTMLImageElement> =>
     image.src = url;
   });
 
-async function getCroppedImg(imageSrc: string, pixelCrop: { x: number; y: number; width: number; height: number }): Promise<string | null> {
+async function getCroppedImg(imageSrc: string, pixelCrop: { x: number; y: number; width: number; height: number; }): Promise<string | null> {
   const image = await createImage(imageSrc);
   const canvas = document.createElement("canvas");
   const ctx = canvas.getContext("2d");
