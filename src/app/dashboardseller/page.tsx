@@ -87,6 +87,19 @@ export default function SellerDashboardPage() {
   const [activeMenu, setActiveMenu] = useState<
     "dashboard" | "produk" | "pesanan" | "profile"
   >("dashboard");
+  /* ===== THEME MODE ===== */
+const [isDark, setIsDark] = useState(true);
+
+useEffect(() => {
+  const savedTheme = localStorage.getItem("seller_theme");
+  if (savedTheme === "light") setIsDark(false);
+}, []);
+
+const toggleTheme = () => {
+  const next = !isDark;
+  setIsDark(next);
+  localStorage.setItem("seller_theme", next ? "dark" : "light");
+};
 
   /* ================= AUTH ================= */
   useEffect(() => {
@@ -253,18 +266,51 @@ export default function SellerDashboardPage() {
   }
 
   return (
-    <div className="min-h-screen flex bg-[#7A1F1F] text-white">
+    <div
+  className={`min-h-screen flex transition-colors duration-300 ${
+    isDark
+      ? "bg-gradient-to-br from-[#4F0F0F] via-[#6A1414] to-[#4F0F0F] text-white"
+      : "bg-gray-100 text-black"
+  }`}
+>
+
+
+
       {/* SIDEBAR */}
-      <aside className="w-[240px] bg-[#8B1D1D] p-6 space-y-2">
-        <h2 className="font-bold text-lg mb-4">A SHOP</h2>
+      <aside className="w-[240px] bg-[#2a0505] border-r border-[#5c1010] p-6 space-y-2 shadow-xl">
+
+    <div className="flex items-center gap-3 mb-8">
+  <div className="w-12 h-12 rounded-full bg-[#3f0e0e] border-2 border-[#E53935] shadow-[0_0_15px_rgba(229,57,53,0.6)] flex items-center justify-center overflow-hidden">
+    <img
+      src="/A-logo.png"
+      alt="A Logo"
+      className="w-full h-full object-cover"
+      onError={(e) => {
+        e.currentTarget.style.display = "none";
+      }}
+    />
+    
+    <span className="font-extrabold text-xl text-[#E53935]">A</span>
+  </div>
+
+  <div>
+   
+    <p className="text-[11px] text-gray-400 -mt-0.5">
+      Seller Dashboard
+    </p>
+  </div>
+</div>
 
         {["dashboard", "produk", "pesanan", "profile"].map((m) => (
           <button
             key={m}
             onClick={() => setActiveMenu(m as any)}
-            className={`w-full text-left px-4 py-2 rounded ${
-              activeMenu === m ? "bg-red-600" : "hover:bg-black/40"
-            }`}
+           className={`w-full text-left px-4 py-2.5 rounded-lg font-bold transition ${
+  activeMenu === m
+    ? "bg-[#E53935] shadow-lg"
+    : "hover:bg-[#3f0e0e]"
+}`}
+
           >
             {m === "dashboard"
               ? "Dashboard"
@@ -283,9 +329,22 @@ export default function SellerDashboardPage() {
           Logout
         </button>
       </aside>
+<button
+  onClick={toggleTheme}
+  title="Mode Pagi / Malam"
+  className={`w-9 h-9 rounded-full flex items-center justify-center border transition mb-4 ${
+    isDark
+      ? "bg-[#3f0e0e] border-[#5c1010] hover:bg-[#4a1212]"
+      : "bg-white border-gray-300 hover:bg-gray-200"
+  }`}
+>
+  <span className="text-lg">
+    {isDark ? "🌙" : "☀️"}
+  </span>
+</button>
 
       {/* MAIN */}
-      <main className="flex-1 p-8">
+     <main className="flex-1 p-8 space-y-6">
         {activeMenu === "dashboard" && (
           <h1 className="text-xl font-bold">
             Selamat Datang di Dashboard Seller 👋
@@ -298,7 +357,8 @@ export default function SellerDashboardPage() {
               <h1 className="text-xl font-bold">Produk</h1>
               <button
                 onClick={() => router.push("/dashboardseller/tambah-produk")}
-                className="bg-black px-4 py-2 rounded"
+                className="bg-[#E53935] hover:bg-[#d32f2f] px-4 py-2 rounded-lg font-bold shadow"
+
               >
                 Tambahkan Produk
               </button>
@@ -306,8 +366,11 @@ export default function SellerDashboardPage() {
 
             <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
               {products.map((p) => (
-                <div key={p._id} className="bg-white text-black rounded">
-                  <div className="h-[150px] bg-gray-200">
+              <div
+  key={p._id}
+  className="bg-[#2a0505] border border-[#5c1010] rounded-xl shadow-lg overflow-hidden hover:bg-[#320606] transition"
+>
+                 <div className="p-4 text-white">
                     {p.images?.[0] && (
                       <img
                         src={p.images[0]}
@@ -336,7 +399,10 @@ export default function SellerDashboardPage() {
 
             <div className="space-y-4">
               {orders.map((o) => (
-                <div key={o._id} className="bg-white text-black p-4 rounded">
+                <div
+  key={o._id}
+  className="bg-[#2a0505] border border-[#5c1010] p-5 rounded-xl shadow-lg text-white"
+>
                   <div className="flex justify-between mb-2">
                     <b>{o.uniqueCode}</b>
                     <span className="text-sm">Status: {o.status}</span>
@@ -407,7 +473,7 @@ export default function SellerDashboardPage() {
             <h1 className="text-xl font-bold mb-6">Profil Toko</h1>
 
             {/* BIODATA */}
-            <div className="bg-[#8B1D1D] p-6 rounded mb-6 max-w-xl">
+            <div className="bg-[#2a0505] border border-[#5c1010] p-6 rounded-xl mb-6 max-w-xl shadow-lg">
               <h2 className="font-bold mb-3">Biodata</h2>
 
               <input
@@ -415,7 +481,8 @@ export default function SellerDashboardPage() {
                 onChange={(e) =>
                   setProfile({ ...profile, name: e.target.value })
                 }
-                className="w-full mb-2 p-2 rounded text-black"
+                className="w-full mb-2 p-2 rounded bg-[#3f0e0e] border border-[#5c1010] text-white outline-none focus:border-[#E53935]"
+
               />
 
               <input
@@ -423,7 +490,7 @@ export default function SellerDashboardPage() {
                 onChange={(e) =>
                   setProfile({ ...profile, email: e.target.value })
                 }
-                className="w-full mb-2 p-2 rounded text-black"
+                className="w-full mb-2 p-2 rounded bg-[#3f0e0e] border border-[#5c1010] text-white outline-none focus:border-[#E53935]"
               />
 
               <input
@@ -439,7 +506,8 @@ export default function SellerDashboardPage() {
 
               <button
                 onClick={updateProfile}
-                className="bg-black px-4 py-2 rounded"
+                className="bg-[#E53935] hover:bg-[#d32f2f] px-4 py-2 rounded-lg font-bold shadow"
+
               >
                 Simpan Profil
               </button>

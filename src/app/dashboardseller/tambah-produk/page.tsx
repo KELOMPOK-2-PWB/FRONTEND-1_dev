@@ -71,20 +71,16 @@ export default function TambahProdukPage() {
 
     try {
       const formData = new FormData();
-      formData.append("image", file); 
+      formData.append("image", file);
 
       const res = await fetch(
         `${UPLOADER_BASE_URL}?apikey=${UPLOADER_API_KEY}`,
-        {
-          method: "POST",
-          body: formData,
-        },
+        { method: "POST", body: formData },
       );
 
       const data = await res.json();
 
       if (!res.ok || !data.url) {
-        console.error(data);
         alert("Gagal upload gambar");
         return;
       }
@@ -93,9 +89,6 @@ export default function TambahProdukPage() {
         ...prev,
         images: [...prev.images, data.url],
       }));
-    } catch (err) {
-      console.error("UPLOAD ERROR:", err);
-      alert("Upload gagal");
     } finally {
       setUploading(false);
     }
@@ -132,43 +125,37 @@ export default function TambahProdukPage() {
           dropEnd: new Date(form.dropEnd).toISOString(),
         }),
       });
-      if (new Date(form.dropEnd) <= new Date(form.dropStart)) {
-        alert("Tanggal akhir drop harus lebih besar dari tanggal mulai");
-        return;
-      }
 
       const data = await res.json();
-
       if (!res.ok) {
-        console.error(data);
         alert(data.message || "Gagal menambahkan produk");
         return;
       }
 
       alert("Produk berhasil ditambahkan");
       router.push("/dashboardseller");
-    } catch (err) {
-      console.error("SUBMIT ERROR:", err);
-      alert("Terjadi kesalahan server");
     } finally {
       setLoading(false);
     }
   };
 
   return (
-    <div className="min-h-screen flex bg-[#7A1F1F] text-white">
+    <div className="min-h-screen flex bg-gradient-to-br from-[#4F0F0F] via-[#6A1414] to-[#4F0F0F] text-white">
+
       {/* SIDEBAR */}
-      <aside className="w-[240px] bg-[#8B1D1D] p-6 space-y-3">
-        <h2 className="font-bold text-lg">A SHOP</h2>
+      <aside className="w-[240px] bg-[#2a0505] border-r border-[#5c1010] p-6 shadow-xl">
+        <h2 className="text-xl font-extrabold text-[#E53935] tracking-wide mb-6">
+          A SHOP
+        </h2>
 
         <button
           onClick={() => router.push("/dashboardseller")}
-          className="w-full text-left px-4 py-2 rounded hover:bg-black/40"
+          className="w-full text-left px-4 py-2 rounded-lg font-bold hover:bg-[#3f0e0e]"
         >
           Dashboard
         </button>
 
-        <button className="w-full text-left px-4 py-2 rounded bg-red-600">
+        <button className="w-full text-left px-4 py-2 mt-2 rounded-lg font-bold bg-[#E53935] shadow">
           Produk
         </button>
 
@@ -177,7 +164,7 @@ export default function TambahProdukPage() {
             localStorage.clear();
             router.push("/login");
           }}
-          className="mt-6 bg-black/50 w-full py-2 rounded hover:bg-black"
+          className="mt-8 w-full py-2 rounded-lg bg-black/60 hover:bg-black font-bold"
         >
           Logout
         </button>
@@ -185,21 +172,25 @@ export default function TambahProdukPage() {
 
       {/* MAIN */}
       <main className="flex-1 p-10">
-        <h1 className="text-xl font-bold mb-6">Tambahkan Produk</h1>
+        <h1 className="text-2xl font-bold mb-6">
+          Tambahkan Produk
+        </h1>
 
         <form
           onSubmit={handleSubmit}
-          className="bg-[#8B1D1D] p-8 rounded space-y-5 max-w-3xl"
+          className="bg-[#2a0505] border border-[#5c1010] p-8 rounded-xl shadow-lg space-y-5 max-w-3xl"
         >
           {/* UPLOAD */}
-          <label className="block bg-gray-200 h-[180px] rounded flex flex-col items-center justify-center text-gray-700 cursor-pointer">
+          <label className="block h-[180px] rounded-xl border-2 border-dashed border-[#E53935] flex items-center justify-center cursor-pointer hover:bg-[#3f0e0e] transition">
             <input
               type="file"
               accept=".jpg,.png"
               onChange={handleUploadImage}
               hidden
             />
-            {uploading ? "Mengunggah..." : "Klik untuk unggah gambar"}
+            <span className="text-sm opacity-80">
+              {uploading ? "Mengunggah..." : "Klik untuk upload gambar"}
+            </span>
           </label>
 
           {/* PREVIEW */}
@@ -209,8 +200,7 @@ export default function TambahProdukPage() {
                 <img
                   key={i}
                   src={img}
-                  alt="preview"
-                  className="w-24 h-24 object-cover rounded"
+                  className="w-24 h-24 object-cover rounded-lg border border-[#5c1010]"
                 />
               ))}
             </div>
@@ -221,8 +211,7 @@ export default function TambahProdukPage() {
             placeholder="Nama Produk"
             value={form.name}
             onChange={handleChange}
-            required
-            className="w-full px-3 py-2 rounded text-black"
+            className="w-full p-2 rounded bg-[#3f0e0e] border border-[#5c1010] outline-none focus:border-[#E53935]"
           />
 
           <textarea
@@ -230,16 +219,14 @@ export default function TambahProdukPage() {
             placeholder="Deskripsi Produk"
             value={form.description}
             onChange={handleChange}
-            required
-            className="w-full px-3 py-2 rounded text-black min-h-[100px]"
+            className="w-full p-2 rounded bg-[#3f0e0e] border border-[#5c1010] outline-none focus:border-[#E53935] min-h-[100px]"
           />
 
           <select
             name="category"
             value={form.category}
             onChange={handleChange}
-            required
-            className="w-full px-3 py-2 rounded text-black"
+            className="w-full p-2 rounded bg-[#3f0e0e] border border-[#5c1010]"
           >
             <option value="">Pilih Kategori</option>
             <option value="Fashion">Fashion</option>
@@ -247,53 +234,48 @@ export default function TambahProdukPage() {
             <option value="Makanan">Makanan</option>
           </select>
 
-          <input
-            type="number"
-            name="price"
-            placeholder="Harga (IDR)"
-            value={form.price}
-            onChange={handleChange}
-            required
-            className="w-full px-3 py-2 rounded text-black"
-          />
+          <div className="grid grid-cols-2 gap-4">
+            <input
+              type="number"
+              name="price"
+              placeholder="Harga"
+              value={form.price}
+              onChange={handleChange}
+              className="p-2 rounded bg-[#3f0e0e] border border-[#5c1010]"
+            />
 
-          <input
-            type="number"
-            name="quantity"
-            placeholder="Total Stok"
-            value={form.quantity}
-            onChange={handleChange}
-            required
-            className="w-full px-3 py-2 rounded text-black"
-          />
-          <div>
-            <label className="block mb-1 text-sm">Mulai Drop</label>
+            <input
+              type="number"
+              name="quantity"
+              placeholder="Stok"
+              value={form.quantity}
+              onChange={handleChange}
+              className="p-2 rounded bg-[#3f0e0e] border border-[#5c1010]"
+            />
+          </div>
+
+          <div className="grid grid-cols-2 gap-4">
             <input
               type="datetime-local"
               name="dropStart"
               value={form.dropStart}
               onChange={handleChange}
-              required
-              className="w-full px-3 py-2 rounded text-black"
+              className="p-2 rounded bg-[#3f0e0e] border border-[#5c1010]"
             />
-          </div>
 
-          <div>
-            <label className="block mb-1 text-sm">Akhir Drop</label>
             <input
               type="datetime-local"
               name="dropEnd"
               value={form.dropEnd}
               onChange={handleChange}
-              required
-              className="w-full px-3 py-2 rounded text-black"
+              className="p-2 rounded bg-[#3f0e0e] border border-[#5c1010]"
             />
           </div>
 
           <button
             type="submit"
             disabled={loading}
-            className="w-full bg-black text-white py-2 rounded font-bold hover:bg-black/80"
+            className="w-full bg-[#E53935] hover:bg-[#d32f2f] py-2 rounded-lg font-bold shadow"
           >
             {loading ? "Menyimpan..." : "Simpan Produk"}
           </button>
