@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useCallback } from "react";
 import { useRouter } from "next/navigation";
 
 interface NavbarProps {
@@ -8,9 +8,32 @@ interface NavbarProps {
   darkMode?: boolean;
 }
 
+// --- TYPE DEFINITIONS BARU UNTUK CART ITEM ---
+interface Product {
+  _id: string;
+  name: string;
+  price: number;
+  images: string[];
+}
+
+interface CartItem {
+  _id: string;
+  product: Product;
+  quantity: number;
+}
+
 // Konfigurasi API
 const BASE_URL = process.env.NEXT_PUBLIC_BACKEND_URL;
 const BACKEND_TOKEN = process.env.NEXT_PUBLIC_BACKEND_TOKEN;
+
+// Helper Format Rupiah
+const formatRupiah = (num: number) => {
+  return new Intl.NumberFormat("id-ID", {
+    style: "currency",
+    currency: "IDR",
+    maximumFractionDigits: 0,
+  }).format(num);
+};
 
 export default function Navbar({ isLoggedIn = false, darkMode = true }: NavbarProps) {
   const router = useRouter();
@@ -18,18 +41,21 @@ export default function Navbar({ isLoggedIn = false, darkMode = true }: NavbarPr
   
   // State Data
   const [userInitial, setUserInitial] = useState("A");
-  const [avatarUrl, setAvatarUrl] = useState<string | null>(null); // 🔥 STATE BARU UTK FOTO
+  const [avatarUrl, setAvatarUrl] = useState<string | null>(null);
+  
+  // 🔥 State Cart Diperbarui
   const [cartCount, setCartCount] = useState(0); 
+  const [cartItems, setCartItems] = useState<CartItem[]>([]); // Menyimpan detail barang
+  
   const [notifCount, setNotifCount] = useState(3); 
 
   // State Search
   const [searchQuery, setSearchQuery] = useState("");
 
-  // 1. Ambil Data User (Foto & Inisial)
+  // 1. Ambil Data User
   useEffect(() => {
     if (typeof window !== "undefined" && isLoggedIn) {
       try {
-        // A. Ambil Data Dasar
         const userDataStr = localStorage.getItem("userData");
         let backendAvatar = null;
         
@@ -40,16 +66,14 @@ export default function Navbar({ isLoggedIn = false, darkMode = true }: NavbarPr
           backendAvatar = user.avatar;
         }
 
-        // B. Cek Foto Lokal ("Cheat" LocalStorage dari Profile Page)
         const localAvatar = localStorage.getItem("my_custom_avatar");
 
-        // C. Tentukan Foto Mana yang Dipakai (Prioritas: Lokal > Backend)
         if (localAvatar) {
             setAvatarUrl(localAvatar);
         } else if (backendAvatar) {
             setAvatarUrl(backendAvatar);
         } else {
-            setAvatarUrl(null); // Pakai Inisial
+            setAvatarUrl(null);
         }
 
       } catch (e) {
@@ -58,39 +82,56 @@ export default function Navbar({ isLoggedIn = false, darkMode = true }: NavbarPr
     }
   }, [isLoggedIn]);
 
-  // 2. Fetch Cart Count Real-Time dari API
-  useEffect(() => {
-    const fetchCartCount = async () => {
-      if (!isLoggedIn) return;
+  // 2. Fetch Cart Data (Count + Items)
+  const fetchCartData = useCallback(async () => {
+    if (!isLoggedIn) return;
 
-      const token = localStorage.getItem("authToken");
-      if (!token) return;
+    const token = localStorage.getItem("authToken");
+    if (!token) return;
 
-      try {
-        const res = await fetch(`${BASE_URL}/api/cart`, {
-          method: "GET",
-          headers: {
-            "Content-Type": "application/json",
-            "Authorization": `Bearer ${token}`,
-            "x-api-key": BACKEND_TOKEN || "",
-          },
-        });
+    try {
+      const res = await fetch(`${BASE_URL}/api/cart`, {
+        method: "GET",
+        headers: {
+          "Content-Type": "application/json",
+          "Authorization": `Bearer ${token}`,
+          "x-api-key": BACKEND_TOKEN || "",
+        },
+      });
 
-        const data = await res.json();
+      const data = await res.json();
 
-        if (res.ok) {
-          const items = Array.isArray(data) ? data : (data.data || []);
-          setCartCount(items.length);
-        }
-      } catch (err) {
-        console.error("Gagal mengambil data keranjang:", err);
+      if (res.ok && data) {
+        // Ambil array items
+        const items: CartItem[] = data.items || [];
+        
+        // Simpan detail items ke state
+        setCartItems(items);
+
+        // Hitung total quantity
+        const totalQty = items.reduce((acc, item) => acc + (item.quantity || 0), 0);
+        setCartCount(totalQty);
       }
-    };
-
-    fetchCartCount();
+    } catch (err) {
+      console.error("Gagal mengambil data keranjang:", err);
+    }
   }, [isLoggedIn]);
 
-  // 3. Handle Search
+  // 3. Efek Listen Event
+  useEffect(() => {
+    fetchCartData();
+
+    const handleCartUpdate = () => {
+      fetchCartData();
+    };
+
+    window.addEventListener("cart-updated", handleCartUpdate);
+    return () => {
+      window.removeEventListener("cart-updated", handleCartUpdate);
+    };
+  }, [fetchCartData]);
+
+  // 4. Handle Search
   const handleSearch = (e: React.FormEvent) => {
     e.preventDefault(); 
     if (searchQuery.trim()) {
@@ -101,7 +142,7 @@ export default function Navbar({ isLoggedIn = false, darkMode = true }: NavbarPr
   const handleLogout = () => {
     localStorage.removeItem("authToken");
     localStorage.removeItem("userData");
-    localStorage.removeItem("my_custom_avatar"); // 🔥 Hapus foto lokal pas logout
+    localStorage.removeItem("my_custom_avatar");
     window.location.href = "/login/users"; 
   };
 
@@ -185,21 +226,25 @@ export default function Navbar({ isLoggedIn = false, darkMode = true }: NavbarPr
                 onMouseLeave={() => setActiveMenu(null)}
               >
                 <div 
-                  className="cursor-pointer relative"
+                  className="cursor-pointer relative transform transition-transform hover:scale-110"
                   onClick={() => router.push('/keranjang')}
                 >
                   <svg xmlns="http://www.w3.org/2000/svg" className={`h-7 w-7 transition ${darkMode ? "text-gray-300 hover:text-white" : "text-gray-600 hover:text-[#e53935]"}`} fill="none" viewBox="0 0 24 24" stroke="currentColor">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M3 3h2l.4 2M7 13h10l4-8H5.4M7 13L5.4 5M7 13l-2.293 2.293c-.63.63-.184 1.707.707 1.707H17m0 0a2 2 0 100 4 2 2 0 000-4zm-8 2a2 2 0 11-4 0 2 2 0 014 0z" />
                   </svg>
+                  
                   {cartCount > 0 && (
-                    <span className="absolute -top-2 -right-2 bg-[#e53935] text-white text-[10px] font-bold px-1.5 py-0.5 rounded-full border border-white shadow-sm">
-                      {cartCount}
+                    <span className="absolute -top-2 -right-2 bg-[#e53935] text-white text-[10px] font-bold px-1.5 py-0.5 rounded-full border-2 border-[#7A1616] shadow-sm animate-bounce-short">
+                      {cartCount > 99 ? "99+" : cartCount}
                     </span>
                   )}
                 </div>
 
+                {/* 🔥🔥 UPDATED DROPDOWN CART LIST 🔥🔥 */}
                 {activeMenu === "cart" && (
-                  <div className={`absolute top-[55px] right-[-80px] md:right-0 w-[320px] min-h-[200px] border shadow-2xl rounded-b-md z-50 flex flex-col animate-fadeIn ${darkMode ? "bg-[#5c1010] border-[#9a3a3a]" : "bg-white border-gray-200"}`}>
+                  <div className={`absolute top-[55px] right-[-80px] md:right-0 w-[360px] min-h-[150px] border shadow-2xl rounded-b-md z-50 flex flex-col animate-fadeIn ${darkMode ? "bg-[#5c1010] border-[#9a3a3a]" : "bg-white border-gray-200"}`}>
+                    
+                    {/* Header Dropdown */}
                     <div className={`p-3 border-b flex justify-between items-center ${darkMode ? "bg-[#4a0b0b] border-[#7a1f1f]" : "bg-gray-50 border-gray-200"}`}>
                       <span className={`font-bold text-sm ${darkMode ? "text-white" : "text-gray-800"}`}>Keranjang ({cartCount})</span>
                       <span 
@@ -209,23 +254,64 @@ export default function Navbar({ isLoggedIn = false, darkMode = true }: NavbarPr
                         Lihat Semua
                       </span>
                     </div>
-                    <div className={`flex-1 flex flex-col items-center justify-center text-sm gap-2 p-6 ${darkMode ? "text-gray-400" : "text-gray-500"}`}>
+
+                    {/* List Item Area */}
+                    <div className={`flex-1 flex flex-col ${cartCount === 0 ? "items-center justify-center p-6" : ""}`}>
                         {cartCount > 0 ? (
-                          <div className="text-center w-full">
-                             <p className="mb-4">Ada {cartCount} barang di keranjang</p>
-                             <button 
-                                onClick={() => router.push('/keranjang')} 
-                                className="bg-[#e53935] text-white px-6 py-2 rounded font-bold text-xs hover:bg-red-700 w-full transition-colors"
-                             >
-                               Lihat Keranjang
-                             </button>
-                          </div>
+                          <>
+                            {/* Scrollable List */}
+                            <div className="max-h-[300px] overflow-y-auto custom-scrollbar">
+                                {cartItems.map((item) => (
+                                    <div 
+                                        key={item._id} 
+                                        className={`flex items-center gap-3 p-3 border-b transition-colors ${darkMode ? "border-[#7a1f1f] hover:bg-[#4a0b0b]" : "border-gray-100 hover:bg-gray-50"}`}
+                                    >
+                                        {/* Gambar Produk */}
+                                        <div className="w-12 h-12 flex-shrink-0 bg-black rounded border border-gray-600 overflow-hidden">
+                                            {item.product?.images?.[0] && (
+                                                <img 
+                                                    src={item.product.images[0]} 
+                                                    alt={item.product.name} 
+                                                    className="w-full h-full object-cover"
+                                                />
+                                            )}
+                                        </div>
+
+                                        {/* Info Produk */}
+                                        <div className="flex-1 min-w-0">
+                                            <p className={`text-xs font-bold truncate mb-1 ${darkMode ? "text-white" : "text-gray-800"}`}>
+                                                {item.product?.name || "Produk"}
+                                            </p>
+                                            <div className="flex justify-between items-center">
+                                                <span className={`text-xs ${darkMode ? "text-gray-400" : "text-gray-500"}`}>
+                                                    {item.quantity} x
+                                                </span>
+                                                <span className="text-xs font-bold text-[#e53935]">
+                                                    {formatRupiah(item.product?.price || 0)}
+                                                </span>
+                                            </div>
+                                        </div>
+                                    </div>
+                                ))}
+                            </div>
+
+                            {/* Footer Button */}
+                            <div className={`p-3 ${darkMode ? "bg-[#4a0b0b]" : "bg-gray-50"}`}>
+                                <button 
+                                    onClick={() => router.push('/keranjang')} 
+                                    className="bg-[#e53935] text-white px-4 py-2 rounded font-bold text-xs hover:bg-red-700 w-full transition-colors shadow-md"
+                                >
+                                    Tampilkan Keranjang
+                                </button>
+                            </div>
+                          </>
                         ) : (
                           <>
-                            <svg xmlns="http://www.w3.org/2000/svg" className="h-10 w-10 opacity-50" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            {/* Empty State */}
+                            <svg xmlns="http://www.w3.org/2000/svg" className={`h-12 w-12 mb-2 ${darkMode ? "text-gray-600" : "text-gray-300"}`} fill="none" viewBox="0 0 24 24" stroke="currentColor">
                                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1} d="M16 11V7a4 4 0 00-8 0v4M5 9h14l1 12H4L5 9z" />
                             </svg>
-                            <p>Keranjang belanja kosong</p>
+                            <p className={`text-sm ${darkMode ? "text-gray-400" : "text-gray-500"}`}>Wah, keranjangmu kosong</p>
                           </>
                         )}
                     </div>
@@ -273,13 +359,12 @@ export default function Navbar({ isLoggedIn = false, darkMode = true }: NavbarPr
                 </svg>
               </div>
 
-              {/* 4. Profile (Avatar ATAU Inisial) */}
+              {/* 4. Profile */}
               <div 
                 className="relative group py-4 pl-2"
                 onMouseEnter={() => setActiveMenu("profile")}
                 onMouseLeave={() => setActiveMenu(null)}
               >
-                {/* 🔥 LOGIKA TAMPILAN PROFIL */}
                 <div className={`w-9 h-9 rounded-full flex items-center justify-center font-bold cursor-pointer border transition-all overflow-hidden ${darkMode ? "bg-purple-600 text-white border-white/30 hover:border-white" : "bg-purple-600 text-white border-purple-800 hover:bg-purple-700"}`}>
                   {avatarUrl ? (
                     <img src={avatarUrl} alt="Avatar" className="w-full h-full object-cover" />
@@ -315,7 +400,6 @@ export default function Navbar({ isLoggedIn = false, darkMode = true }: NavbarPr
               </div>
             </>
           ) : (
-            // --- TAMPILAN BELUM LOGIN ---
             <button 
               onClick={() => router.push('/login/users')}
               className="bg-[#e53935] hover:bg-[#b71c1c] text-white px-6 py-2 rounded-md font-bold text-sm transition-all shadow-lg border border-[#ff5f5f] hover:shadow-red-500/30"

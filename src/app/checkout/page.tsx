@@ -60,7 +60,7 @@ interface CheckoutPayload {
     city: string;
     province: string;
     postalCode: string;
-    country: string; // Tambahkan ini agar tidak dianggap incomplete
+    country: string;
   };
   shippingCost: number;
   selectedProductIds: string[];
@@ -111,7 +111,7 @@ export default function CheckoutPage() {
 
   const fetchData = async () => {
     try {
-      // 1. Ambil Alamat
+      // 1. Ambil Alamat (TETAP DARI API)
       const addrRes = await api.get("/api/users/address");
       const addrData = addrRes.data;
       
@@ -128,24 +128,35 @@ export default function CheckoutPage() {
       if (defaultAddr) setSelectedAddressId(defaultAddr._id);
       else if (listAddress.length > 0) setSelectedAddressId(listAddress[0]._id);
 
-      // 2. Ambil Keranjang
-      const cartRes = await api.get("/api/cart");
-      const cartData = cartRes.data;
+      // 2. Ambil Barang DARI LOCALSTORAGE (BUKAN API LAGI)
+      // Supaya hanya barang yang dicentang yang muncul
+      const checkoutData = localStorage.getItem("checkoutData");
       
-      let items: CartItem[] = [];
-      if (cartData) {
-        if (Array.isArray(cartData.items)) {
-            items = cartData.items;
-        } else if (cartData.data && Array.isArray(cartData.data.items)) {
-            items = cartData.data.items;
-        } else if (Array.isArray(cartData)) {
-             items = cartData as any;
+      if (checkoutData) {
+        const parsedData = JSON.parse(checkoutData);
+        
+        if (Array.isArray(parsedData) && parsedData.length > 0) {
+          // Kita ubah format data LocalStorage agar cocok dengan format UI (CartItem)
+          const mappedItems: CartItem[] = parsedData.map((item: any) => ({
+            _id: item.productId, // Gunakan productId sebagai ID unik
+            quantity: item.quantity,
+            product: {
+                _id: item.productId,
+                name: item.name,
+                price: item.price,
+                images: [item.image] // Masukkan image string ke dalam array
+            }
+          }));
+          
+          setCartItems(mappedItems);
+        } else {
+            // Jika data kosong/rusak, kembalikan ke cart
+            router.push("/cart");
         }
+      } else {
+         // Jika tidak ada data checkout, kembalikan ke cart
+         router.push("/cart");
       }
-
-      // Validasi item agar tidak null
-      const validItems = items.filter(item => item && item.product && item.product._id);
-      setCartItems(validItems);
 
     } catch (error) {
       console.error("Error loading checkout data", error);
@@ -159,7 +170,7 @@ export default function CheckoutPage() {
   const grandTotal = subTotal + SHIPPING_COST;
   const selectedAddress = addresses.find(a => a._id === selectedAddressId);
 
-  // --- 🔥 HANDLE CHECKOUT (UPDATED) ---
+  // --- 🔥 HANDLE CHECKOUT ---
   const handlePay = async () => {
     if (!selectedAddress) {
       alert("Harap pilih alamat pengiriman!");
@@ -181,6 +192,7 @@ export default function CheckoutPage() {
         country: selectedAddress.country || "Indonesia"
       },
       shippingCost: SHIPPING_COST,
+      // Ambil ID produk dari state cartItems yang sudah difilter
       selectedProductIds: cartItems.map(item => item.product._id),
       paymentMethod: "QRIS"
     };
@@ -197,10 +209,13 @@ export default function CheckoutPage() {
             (response.data.data && response.data.data._id); 
         
         if (orderId) {
-            // 🔥 SIMPAN ID KE LOCAL STORAGE
+            // SIMPAN ID KE LOCAL STORAGE
             localStorage.setItem("current_order_id", orderId);
             
-            // REDIRECT KE HALAMAN PAYMENT (TANPA ID DI URL)
+            // HAPUS DATA CHECKOUT SEMENTARA AGAR BERSIH
+            localStorage.removeItem("checkoutData");
+
+            // REDIRECT KE HALAMAN PAYMENT
             router.push("/payment");
         } else {
             alert("Gagal mendapatkan Order ID.");

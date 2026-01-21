@@ -3,335 +3,449 @@
 import React, { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import Navbar from "../../component/Element/Navbar";
-import axios, { AxiosError } from "axios";
 
 // --- KONFIGURASI API ---
 const BASE_URL = process.env.NEXT_PUBLIC_BACKEND_URL;
 const BACKEND_TOKEN = process.env.NEXT_PUBLIC_BACKEND_TOKEN;
 
-// --- AXIOS INSTANCE ---
-const api = axios.create({
-  baseURL: BASE_URL,
-  headers: {
-    "Content-Type": "application/json",
-    "x-api-key": BACKEND_TOKEN || "",
-  },
-});
-
-// Helper set token
-const setAuthToken = (token: string | null) => {
-  if (token) {
-    api.defaults.headers.common["Authorization"] = `Bearer ${token}`;
-  } else {
-    delete api.defaults.headers.common["Authorization"];
-  }
-};
-
-// ============================================================================
-// 1. TIPE DATA
-// ============================================================================
-
-interface Address {
-  _id: string;
-  street: string;
-  city: string;
-  province: string;
-  postalCode: string;
-  country: string;
-  isDefaultAddress: boolean;
-}
-
-interface Product {
+// --- INTERFACE ---
+interface ApiProductDetails {
   _id: string;
   name: string;
   price: number;
   images: string[];
+  quantity: number; // Stok Master
 }
 
-interface CartItem {
+interface ApiCartItem {
   _id: string;
-  quantity: number;
-  product: Product;
+  quantity: number; // Jumlah di keranjang
+  product: ApiProductDetails | null;
 }
 
-interface CheckoutPayload {
-  shippingAddress: {
-    street: string;
-    city: string;
-    province: string;
-    postalCode: string;
-  };
-  shippingCost: number;
-  selectedProductIds: string[];
-}
-
-// ============================================================================
-// 2. HELPER FUNCTIONS
-// ============================================================================
-
-const formatRupiah = (num: number) => {
-  return new Intl.NumberFormat("id-ID", {
-    style: "currency",
-    currency: "IDR",
-    maximumFractionDigits: 0,
-  }).format(num);
+// Tipe Data State Lokal
+type CartItemState = {
+  productId: string;
+  name: string;
+  price: number;
+  quantity: number; // Jumlah Beli
+  stock: number;    // 🔥 Stok Asli (Master)
+  image: string;
+  isChecked: boolean;
 };
 
-// ============================================================================
-// 3. KOMPONEN PAGE
-// ============================================================================
+// --- MODAL COMPONENT ---
+function CustomModal({
+  isOpen,
+  type,
+  title,
+  message,
+  onConfirm,
+  onCancel,
+}: {
+  isOpen: boolean;
+  type: "success" | "error" | "confirm";
+  title: string;
+  message: string;
+  onConfirm: () => void;
+  onCancel?: () => void;
+}) {
+  if (!isOpen) return null;
 
-export default function CheckoutPage() {
+  return (
+    <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 animate-fadeIn">
+      <div className="absolute inset-0 bg-black/70 backdrop-blur-sm" onClick={type !== 'confirm' ? onConfirm : undefined}></div>
+      <div className="bg-[#1E1E1E] text-white w-full max-w-sm rounded-2xl shadow-2xl border border-[#333] p-6 relative z-10 text-center">
+        
+        <div className={`w-16 h-16 rounded-full flex items-center justify-center mx-auto mb-4 ${
+          type === "success" ? "bg-green-900/30 text-green-500" : 
+          type === "error" ? "bg-red-900/30 text-red-500" : 
+          "bg-yellow-900/30 text-yellow-500"
+        }`}>
+          {type === "success" && <span className="text-2xl">✓</span>}
+          {type === "error" && <span className="text-2xl">!</span>}
+          {type === "confirm" && <span className="text-2xl">?</span>}
+        </div>
+
+        <h3 className="text-xl font-bold mb-2">{title}</h3>
+        <p className="text-sm text-gray-400 mb-6">{message}</p>
+
+        <div className="flex gap-3 justify-center">
+          {type === "confirm" && (
+            <button onClick={onCancel} className="flex-1 px-4 py-2 rounded-lg border border-gray-600 text-gray-300 hover:bg-[#333]">Batal</button>
+          )}
+          <button 
+            onClick={onConfirm}
+            className={`flex-1 px-4 py-2 rounded-lg font-bold text-white shadow-lg ${
+              type === "success" ? "bg-green-600 hover:bg-green-700" : 
+              type === "error" ? "bg-red-600 hover:bg-red-700" : 
+              "bg-[#FF3B30] hover:bg-[#d32f2f]"
+            }`}
+          >
+            {type === "confirm" ? "Ya, Hapus" : "OK"}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// --- HELPER FETCH ---
+async function fetchAPI(endpoint: string, method: string, body?: unknown, token?: string) {
+  const headers: Record<string, string> = {
+    "Content-Type": "application/json",
+    "x-api-key": (BACKEND_TOKEN as string) || "",
+  };
+  if (token) headers["Authorization"] = `Bearer ${token}`;
+
+  return await fetch(`${BASE_URL}${endpoint}`, {
+    method,
+    headers,
+    body: body ? JSON.stringify(body) : undefined,
+  });
+}
+
+export default function CartPage() {
   const router = useRouter();
+  const [cartItems, setCartItems] = useState<CartItemState[]>([]);
   const [loading, setLoading] = useState(true);
-  const [processing, setProcessing] = useState(false);
+  const [totalPrice, setTotalPrice] = useState(0);
+  const [isAllChecked, setIsAllChecked] = useState(false);
 
-  // Data State
-  const [addresses, setAddresses] = useState<Address[]>([]);
-  const [selectedAddressId, setSelectedAddressId] = useState<string>("");
-  const [cartItems, setCartItems] = useState<CartItem[]>([]);
-  const [paymentMethod, setPaymentMethod] = useState("TRANSFER_BCA");
+  // State Modal
+  const [modal, setModal] = useState<{
+    isOpen: boolean;
+    type: "success" | "error" | "confirm";
+    title: string;
+    message: string;
+    onConfirm: () => void;
+  }>({ isOpen: false, type: "success", title: "", message: "", onConfirm: () => {} });
 
-  const SHIPPING_COST = 22000; // Hardcode dulu sesuai contoh API
+  const showModal = (type: "success" | "error" | "confirm", title: string, message: string, onConfirm: () => void) => {
+    setModal({ isOpen: true, type, title, message, onConfirm });
+  };
+  const closeModal = () => setModal(prev => ({ ...prev, isOpen: false }));
 
-  // Load Data
+  // --- INITIAL LOAD ---
   useEffect(() => {
     const token = localStorage.getItem("authToken");
     if (!token) {
       router.push("/login/users");
       return;
     }
-    setAuthToken(token);
-    fetchData();
-  }, [router]);
+    // Panggil fungsi fetch gabungan
+    fetchDataCombined(token);
+  }, []);
 
-  const fetchData = async () => {
+  // --- HITUNG TOTAL ---
+  useEffect(() => {
+    // Hitung total harga item yang dicentang
+    const total = cartItems
+      .filter((item) => item.isChecked)
+      .reduce((sum, item) => sum + item.price * item.quantity, 0);
+    setTotalPrice(total);
+    
+    // Cek Select All status
+    // Hanya perhitungkan item yang stoknya valid (>0) untuk select all logic
+    const validItems = cartItems.filter(i => i.stock > 0); 
+    const allChecked = validItems.length > 0 && validItems.every((item) => item.isChecked);
+    setIsAllChecked(allChecked);
+  }, [cartItems]);
+
+  // --- 🔥 CORE LOGIC: GABUNGKAN DATA CART & PRODUCT (FIX DATA STOK 0) 🔥 ---
+  const fetchDataCombined = async (token: string) => {
+    setLoading(true);
     try {
-      // 1. Ambil Alamat
-      const addrRes = await api.get("/api/users/address");
-      const addrData = addrRes.data;
+      // 1. Request Cart
+      const cartReq = fetchAPI("/api/cart", "GET", null, token);
+      // 2. Request Master Products (Supaya dapat stok asli yang benar)
+      const productsReq = fetchAPI("/api/products-users", "GET", null, token);
+
+      const [cartRes, productsRes] = await Promise.all([cartReq, productsReq]);
       
-      // Handle format response yg mungkin beda (array langsung atau object data)
-      const listAddress = Array.isArray(addrData) ? addrData : (addrData as any).data || [];
-      setAddresses(listAddress);
+      const cartData = await cartRes.json();
+      const productsData = await productsRes.json();
 
-      // Otomatis pilih alamat default atau yang pertama
-      const defaultAddr = listAddress.find((a: Address) => a.isDefaultAddress);
-      if (defaultAddr) setSelectedAddressId(defaultAddr._id);
-      else if (listAddress.length > 0) setSelectedAddressId(listAddress[0]._id);
+      if (cartRes.ok && cartData) {
+        const rawCartItems = cartData.items || (cartData.data && cartData.data.items) || [];
+        // Pastikan productsData array
+        const allProducts = Array.isArray(productsData) ? productsData : (productsData.data || []);
 
-      // 2. Ambil Keranjang
-      const cartRes = await api.get("/api/cart");
-      const cartData = cartRes.data;
-      const items = (cartData as any).data?.items || [];
-      setCartItems(items);
+        const mergedItems: CartItemState[] = rawCartItems.map((cItem: ApiCartItem) => {
+            if (!cItem.product) return null;
 
+            // Cari produk asli di list products untuk dapat stok terbaru
+            const masterProduct = allProducts.find((p: any) => p._id === cItem.product!._id);
+            
+            // 🔥 PRIORITASKAN STOK DARI MASTER PRODUCT 🔥
+            // Jika tidak ketemu, fallback ke stok di cart (yang mungkin bug/0)
+            const realStock = masterProduct ? masterProduct.quantity : (cItem.product.quantity || 0);
+            
+            let currentQty = cItem.quantity || 1;
+
+            // Validasi: Jika quantity di cart entah kenapa lebih besar dari stok asli
+            if (realStock > 0 && currentQty > realStock) {
+                currentQty = realStock;
+            }
+
+            return {
+                productId: cItem.product._id, 
+                name: cItem.product.name,
+                price: cItem.product.price,
+                quantity: currentQty,
+                stock: realStock, // Stok yang sudah dikoreksi
+                image: cItem.product.images?.[0] || "",
+                isChecked: false, 
+            };
+        }).filter((item: CartItemState | null) => item !== null); 
+
+        setCartItems(mergedItems);
+      }
     } catch (error) {
-      console.error("Error loading checkout data", error);
+      console.error("Error fetching data:", error);
     } finally {
       setLoading(false);
     }
   };
 
-  // Kalkulasi
-  const subTotal = cartItems.reduce((acc, item) => acc + (item.product.price * item.quantity), 0);
-  const grandTotal = subTotal + SHIPPING_COST;
-  const selectedAddress = addresses.find(a => a._id === selectedAddressId);
+  // --- 🔥 FIX LOGIC UPDATE QUANTITY (MENGHILANGKAN POPUP SAAT KURANG) 🔥 ---
+  const handleUpdateQuantity = async (productId: string, newQty: number) => {
+    const token = localStorage.getItem("authToken");
+    if (!token) return;
 
-  // Handle Checkout Action
-  const handlePay = async () => {
-    if (!selectedAddress) {
-      alert("Harap pilih alamat pengiriman!");
-      return;
+    const targetItem = cartItems.find((item) => item.productId === productId);
+    if (!targetItem) return;
+
+    // 1. Validasi Batas Bawah: Tidak boleh kurang dari 1
+    if (newQty < 1) return;
+
+    // 2. 🔥 Validasi Batas Atas HANYA JIKA MENAMBAH 🔥
+    // Jika user menekan tombol (-), newQty < quantity saat ini. Kita tidak perlu cek stok maksimal.
+    // Ini mencegah popup muncul kalau stok di database sedang error (0).
+    const isIncreasing = newQty > targetItem.quantity;
+    
+    if (isIncreasing) {
+        if (targetItem.stock > 0 && newQty > targetItem.stock) {
+            showModal("error", "Batas Stok", `Stok hanya tersisa ${targetItem.stock} pcs.`, closeModal);
+            return;
+        }
+        // Jika stok benar-benar 0 dari DB, dan user coba nambah
+        if (targetItem.stock === 0) {
+             showModal("error", "Stok Habis", "Stok produk ini sedang kosong.", closeModal);
+             return;
+        }
     }
-    if (cartItems.length === 0) {
-      alert("Keranjang kosong!");
-      return;
-    }
 
-    setProcessing(true);
+    // Update UI Optimistic
+    setCartItems((prev) => prev.map((item) => 
+      item.productId === productId ? { ...item, quantity: newQty } : item
+    ));
 
-    const payload: CheckoutPayload = {
-      shippingAddress: {
-        street: selectedAddress.street,
-        city: selectedAddress.city,
-        province: selectedAddress.province,
-        postalCode: selectedAddress.postalCode
-      },
-      shippingCost: SHIPPING_COST,
-      selectedProductIds: cartItems.map(item => item.product._id)
-    };
-
+    // Update Backend
     try {
-      // POST ke /api/orders/checkout sesuai Gambar 1
-      const response = await api.post("/api/orders/checkout", payload);
-
-      if (response.status >= 200 && response.status < 300) {
-        alert(`Checkout Berhasil!\nKode Unik: ${response.data.uniqueCode}`);
-        router.push("/profile?tab=pesanan"); // Redirect ke history pesanan
-      }
-    } catch (error: any) {
-      const msg = error.response?.data?.message || "Gagal melakukan checkout.";
-      alert("Gagal: " + msg);
-    } finally {
-      setProcessing(false);
+      await fetchAPI("/api/cart/update", "PUT", { productId, quantity: newQty }, token);
+      window.dispatchEvent(new Event("cart-updated"));
+    } catch (error) {
+      console.error("Gagal update", error);
+      // Jika gagal, refresh data untuk sinkronisasi ulang
+      fetchDataCombined(token); 
     }
   };
 
-  if (loading) {
-    return (
-      <div className="min-h-screen bg-[#7A1F1F] flex items-center justify-center">
-        <div className="w-10 h-10 border-4 border-white border-t-transparent rounded-full animate-spin"></div>
-      </div>
-    );
-  }
+  // --- INPUT MANUAL ---
+  const handleInputChange = (productId: string, value: string) => {
+      // Izinkan field kosong sementara saat mengetik
+      if (value === "") {
+          setCartItems(prev => prev.map(p => p.productId === productId ? { ...p, quantity: 0 } : p));
+          return;
+      }
+      const num = parseInt(value);
+      if (!isNaN(num)) {
+          setCartItems(prev => prev.map(p => p.productId === productId ? { ...p, quantity: num } : p));
+      }
+  };
+
+  const handleInputBlur = (productId: string, quantity: number, stock: number) => {
+      let finalQty = quantity;
+      
+      // Jika user membiarkan kosong atau 0, kembalikan ke 1
+      if (finalQty < 1) finalQty = 1;
+      
+      // Validasi Stok saat blur (hanya jika stok valid)
+      if (stock > 0 && finalQty > stock) {
+           showModal("error", "Stok Terbatas", `Maksimal pembelian ${stock} pcs`, closeModal);
+           finalQty = stock;
+      }
+      
+      handleUpdateQuantity(productId, finalQty);
+  };
+
+  // --- DELETE & CHECKOUT ---
+  const confirmDelete = (productId: string) => {
+    showModal("confirm", "Hapus Produk?", "Hapus dari keranjang?", () => { handleDelete(productId); closeModal(); });
+  };
+
+  const handleDelete = async (productId: string) => {
+    const token = localStorage.getItem("authToken");
+    if (!token) return;
+
+    setCartItems((prev) => prev.filter((item) => item.productId !== productId));
+
+    try {
+      await fetchAPI(`/api/cart/remove/${productId}`, "DELETE", null, token);
+      window.dispatchEvent(new Event("cart-updated"));
+      showModal("success", "Berhasil", "Produk dihapus.", closeModal);
+    } catch (error) { 
+      fetchDataCombined(token); 
+    }
+  };
+
+  const handleCheckout = () => {
+    const selectedItems = cartItems.filter(item => item.isChecked);
+    
+    // Validasi akhir sebelum pindah halaman
+    const invalidItems = selectedItems.filter(item => item.stock === 0 || item.quantity > item.stock);
+    if (invalidItems.length > 0) {
+        showModal("error", "Stok Masalah", `Produk "${invalidItems[0].name}" stoknya tidak mencukupi atau habis.`, closeModal);
+        return;
+    }
+
+    if (selectedItems.length === 0) {
+        showModal("error", "Pilih Produk", "Pilih produk dulu.", closeModal);
+        return;
+    }
+
+    localStorage.setItem("checkoutData", JSON.stringify(selectedItems));
+    router.push("/checkout");
+  };
+
+  // --- CHECKBOX ---
+  const handleCheckItem = (productId: string) => {
+    setCartItems((prev) => prev.map((item) => 
+      item.productId === productId ? { ...item, isChecked: !item.isChecked } : item
+    ));
+  };
+
+  const handleCheckAll = () => {
+    const newState = !isAllChecked;
+    setIsAllChecked(newState);
+    // Jangan centang item yang stoknya 0 (habis)
+    setCartItems((prev) => prev.map((item) => ({ 
+        ...item, 
+        isChecked: item.stock > 0 ? newState : false 
+    })));
+  };
+
+  const formatRupiah = (num: number) => new Intl.NumberFormat("id-ID", { style: "currency", currency: "IDR", minimumFractionDigits: 0 }).format(num);
 
   return (
-    <div className="min-h-screen bg-[#7A1F1F] font-sans text-white pb-20">
+    <div className="min-h-screen bg-[#4F0F0F] font-sans text-white pb-20">
       <Navbar isLoggedIn={true} />
+      <CustomModal {...modal} onCancel={closeModal} />
 
-      <main className="max-w-7xl mx-auto px-4 pt-[100px]">
-        <h1 className="text-3xl font-bold mb-8 pl-2 border-l-4 border-white">Checkout</h1>
+      <main className="max-w-6xl mx-auto px-4 pt-[100px]">
+        <h1 className="text-3xl font-bold mb-8 flex items-center gap-3">
+          <svg className="h-8 w-8 text-[#FF3B30]" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 3h2l.4 2M7 13h10l4-8H5.4M7 13L5.4 5M7 13l-2.293 2.293c-.63.63-.184 1.707.707 1.707H17m0 0a2 2 0 100 4 2 2 0 000-4zm-8 2a2 2 0 11-4 0 2 2 0 014 0z" /></svg>
+          Keranjang Belanja
+        </h1>
 
-        {/* LAYOUT GRID (Kiri: Alamat & Barang, Kanan: Pembayaran & Ringkasan) */}
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-          
-          {/* --- KOLOM KIRI (Span 2) --- */}
-          <div className="lg:col-span-2 space-y-6">
-            
-            {/* CARD 1: ALAMAT */}
-            <div className="bg-[#2a0505] border border-[#5c1010] rounded-xl p-6 shadow-lg">
-              <div className="flex justify-between items-center mb-4 border-b border-[#5c1010] pb-2">
-                <h2 className="text-xl font-bold">Alamat Pengiriman</h2>
-                <button onClick={() => router.push("/profile?tab=alamat")} className="text-xs text-[#ffaaaa] hover:text-white underline">
-                  Ubah Alamat
-                </button>
+        {loading ? (
+           <div className="text-center py-20"><div className="w-10 h-10 border-4 border-[#FF3B30] border-t-transparent rounded-full animate-spin mx-auto mb-4"></div><p>Memuat keranjang...</p></div>
+        ) : cartItems.length === 0 ? (
+           <div className="text-center py-20 bg-[#2a0505] rounded-xl border border-[#5c1010]"><p className="text-gray-400 text-lg mb-6">Keranjang kosong.</p><button onClick={() => router.push("/")} className="bg-[#FF3B30] text-white px-8 py-3 rounded-full font-bold">Belanja Sekarang</button></div>
+        ) : (
+          <div className="grid lg:grid-cols-[1fr,350px] gap-8">
+            <div className="flex flex-col gap-4">
+              <div className="bg-[#2a0505] border border-[#5c1010] p-4 rounded-lg flex items-center gap-4 sticky top-[80px] z-10 shadow-md">
+                <input type="checkbox" checked={isAllChecked} onChange={handleCheckAll} className="w-5 h-5 accent-[#FF3B30] cursor-pointer" />
+                <span className="font-bold text-sm">Pilih Semua ({cartItems.filter(i => i.stock > 0).length})</span>
               </div>
 
-              {addresses.length > 0 ? (
-                <div>
-                  <select 
-                    value={selectedAddressId}
-                    onChange={(e) => setSelectedAddressId(e.target.value)}
-                    className="w-full bg-[#3f0e0e] border border-[#5c1010] text-white p-3 rounded mb-4 focus:outline-none focus:border-red-500"
-                  >
-                    {addresses.map((addr) => (
-                      <option key={addr._id} value={addr._id}>
-                        {addr.street} ({addr.city})
-                      </option>
-                    ))}
-                  </select>
+              {cartItems.map((item) => {
+                const isDbEmpty = item.stock <= 0;
+                // isMaxedOut: Stok ada, tapi jumlah di cart >= stok
+                const isMaxedOut = item.quantity >= item.stock && !isDbEmpty;
+                const remaining = Math.max(0, item.stock - item.quantity);
 
-                  {selectedAddress && (
-                    <div className="text-sm text-gray-300 bg-[#1a0202] p-4 rounded border border-[#3f0e0e]">
-                      <p className="font-bold text-white mb-1">{selectedAddress.street}</p>
-                      <p>{selectedAddress.city}, {selectedAddress.province}</p>
-                      <p>{selectedAddress.postalCode}</p>
-                      <p className="mt-1 text-xs text-red-400 font-bold">{selectedAddress.country}</p>
-                    </div>
-                  )}
-                </div>
-              ) : (
-                <div className="text-center py-6">
-                  <p className="text-gray-400 mb-2">Belum ada alamat.</p>
-                  <button onClick={() => router.push("/profile?tab=alamat")} className="bg-white text-black px-4 py-2 rounded font-bold text-sm">
-                    + Tambah Alamat
-                  </button>
-                </div>
-              )}
-            </div>
+                return (
+                <div key={item.productId} className={`bg-[#2a0505] border p-4 rounded-lg flex gap-4 items-center shadow-md transition-all ${item.isChecked ? "border-[#FF3B30] bg-[#3a0a0a]" : "border-[#5c1010]"} ${isDbEmpty ? "opacity-60" : ""}`}>
+                  
+                  {/* Checkbox: Disabled jika stok habis total */}
+                  <input type="checkbox" checked={item.isChecked} onChange={() => !isDbEmpty && handleCheckItem(item.productId)} disabled={isDbEmpty} className={`w-5 h-5 accent-[#FF3B30] flex-shrink-0 ${isDbEmpty ? "cursor-not-allowed opacity-50" : "cursor-pointer"}`} />
+                  
+                  <div className="w-24 h-24 bg-white rounded-md overflow-hidden flex-shrink-0 border border-gray-700 relative">
+                    {item.image ? <img src={item.image} alt={item.name} className="w-full h-full object-cover" /> : <div className="w-full h-full flex items-center justify-center text-gray-500 text-xs">No Img</div>}
+                    {/* Overlay hanya jika DB benar-benar 0 */}
+                    {isDbEmpty && <div className="absolute inset-0 bg-black/80 flex items-center justify-center text-[10px] text-red-500 font-bold text-center border-2 border-red-900">STOK HABIS</div>}
+                  </div>
 
-            {/* CARD 2: BARANG */}
-            <div className="bg-[#2a0505] border border-[#5c1010] rounded-xl p-6 shadow-lg">
-              <h2 className="text-xl font-bold mb-4 border-b border-[#5c1010] pb-2">Barang</h2>
-              <div className="space-y-4">
-                {cartItems.map((item) => (
-                  <div key={item._id} className="flex gap-4 bg-[#3f0e0e]/50 p-3 rounded-lg border border-[#5c1010]">
-                    {/* Gambar */}
-                    <div className="w-20 h-20 bg-black rounded overflow-hidden shrink-0 border border-[#5c1010]">
-                      {item.product.images?.[0] ? (
-                        <img src={item.product.images[0]} alt={item.product.name} className="w-full h-full object-cover" />
-                      ) : (
-                        <div className="flex items-center justify-center h-full text-xs text-gray-500">No IMG</div>
-                      )}
+                  <div className="flex-1 min-w-0">
+                    <h3 className="font-bold text-lg mb-1 truncate">{item.name}</h3>
+                    <p className="text-[#FF3B30] font-bold mb-1">{formatRupiah(item.price)}</p>
+                    
+                    <div className="mb-3">
+                        {isDbEmpty ? (
+                            <span className="text-xs font-bold text-red-500 bg-red-900/20 px-2 py-1 rounded">Stok Habis (Restock Soon)</span>
+                        ) : (
+                            <span className={`text-xs font-medium px-2 py-1 rounded ${isMaxedOut ? "text-orange-400 bg-orange-900/20" : "text-green-400 bg-green-900/20"}`}>
+                                {isMaxedOut ? "Stok Maksimal di Keranjang" : `Tersedia: ${remaining} pcs`}
+                            </span>
+                        )}
                     </div>
-                    {/* Detail */}
-                    <div className="flex-1 flex flex-col justify-center">
-                      <h3 className="font-bold text-white line-clamp-1">{item.product.name}</h3>
-                      <p className="text-sm text-gray-400 mt-1">
-                        {item.quantity} x {formatRupiah(item.product.price)}
-                      </p>
-                    </div>
-                    {/* Total per item */}
-                    <div className="flex items-center">
-                      <span className="font-bold text-[#ffaaaa]">{formatRupiah(item.product.price * item.quantity)}</span>
+                    
+                    <div className="flex justify-between items-center">
+                        {/* Container Tombol Quantity */}
+                        <div className={`flex items-center border border-gray-600 rounded bg-[#1E1E1E] overflow-hidden ${isDbEmpty ? "opacity-50 pointer-events-none" : ""}`}>
+                            
+                            {/* TOMBOL MINUS */}
+                            <button 
+                                onClick={() => handleUpdateQuantity(item.productId, item.quantity - 1)} 
+                                className="w-8 h-8 flex items-center justify-center hover:bg-[#333] text-gray-300 active:bg-[#444] transition-colors"
+                                disabled={item.quantity <= 1} 
+                            >
+                                -
+                            </button>
+                            
+                            {/* INPUT MANUAL */}
+                            <input 
+                                type="number"
+                                className="w-12 h-8 bg-transparent text-center text-sm font-mono focus:outline-none appearance-none border-l border-r border-gray-700"
+                                value={item.quantity === 0 ? "" : item.quantity}
+                                onChange={(e) => handleInputChange(item.productId, e.target.value)}
+                                onBlur={() => handleInputBlur(item.productId, item.quantity, item.stock)}
+                                onKeyDown={(e) => e.key === 'Enter' && (e.target as HTMLInputElement).blur()}
+                            />
+                            
+                            {/* TOMBOL PLUS */}
+                            <button 
+                                onClick={() => handleUpdateQuantity(item.productId, item.quantity + 1)} 
+                                className={`w-8 h-8 flex items-center justify-center hover:bg-[#333] transition-colors ${isMaxedOut ? "text-gray-600 cursor-not-allowed bg-[#2a2a2a]" : "text-gray-300 active:bg-[#444]"}`}
+                                disabled={isMaxedOut}
+                            >
+                                +
+                            </button>
+                        </div>
+                        <button onClick={() => confirmDelete(item.productId)} className="p-2 text-gray-500 hover:text-red-500 transition-colors bg-[#2a0505] hover:bg-[#3a0a0a] rounded-full border border-transparent hover:border-red-900/50"><svg className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" /></svg></button>
                     </div>
                   </div>
-                ))}
-              </div>
-            </div>
-
-          </div>
-
-          {/* --- KOLOM KANAN (Span 1) --- */}
-          <div className="space-y-6">
-            
-            {/* CARD 3: METODE PEMBAYARAN */}
-            <div className="bg-[#2a0505] border border-[#5c1010] rounded-xl p-6 shadow-lg h-fit">
-              <h2 className="text-xl font-bold mb-4 border-b border-[#5c1010] pb-2">Metode Pembayaran</h2>
-              <div className="flex flex-col gap-2">
-                {["TRANSFER_BCA", "TRANSFER_MANDIRI", "COD", "QRIS"].map((method) => (
-                  <label key={method} className={`flex items-center p-3 rounded cursor-pointer border transition-all ${paymentMethod === method ? "bg-[#3f0e0e] border-white" : "bg-transparent border-[#5c1010] hover:bg-[#3f0e0e]"}`}>
-                    <input 
-                      type="radio" 
-                      name="payment" 
-                      value={method} 
-                      checked={paymentMethod === method} 
-                      onChange={(e) => setPaymentMethod(e.target.value)}
-                      className="accent-white w-4 h-4 mr-3"
-                    />
-                    <span className="font-bold text-sm">{method.replace("_", " ")}</span>
-                  </label>
-                ))}
-              </div>
-            </div>
-
-            {/* CARD 4: RINGKASAN & TOMBOL BAYAR (Sticky) */}
-            <div className="bg-[#2a0505] border border-[#5c1010] rounded-xl p-6 shadow-xl sticky top-[100px]">
-              <h2 className="text-lg font-bold mb-4 border-b border-[#5c1010] pb-2">Ringkasan Belanja</h2>
-              
-              <div className="space-y-2 text-sm mb-4">
-                <div className="flex justify-between text-gray-300">
-                  <span>Total Harga ({cartItems.length} barang)</span>
-                  <span>{formatRupiah(subTotal)}</span>
                 </div>
-                <div className="flex justify-between text-gray-300">
-                  <span>Biaya Pengiriman</span>
-                  <span>{formatRupiah(SHIPPING_COST)}</span>
-                </div>
-              </div>
-
-              <div className="border-t border-[#5c1010] py-4 flex justify-between items-center">
-                <span className="text-lg font-bold">Total Tagihan</span>
-                <span className="text-xl font-bold text-[#ffaaaa]">{formatRupiah(grandTotal)}</span>
-              </div>
-
-              <button 
-                onClick={handlePay}
-                disabled={processing || cartItems.length === 0}
-                className={`w-full py-3 rounded-lg font-bold text-black shadow-lg transition-transform active:scale-95 ${
-                  processing || cartItems.length === 0
-                    ? "bg-gray-500 cursor-not-allowed"
-                    : "bg-white hover:bg-gray-200"
-                }`}
-              >
-                {processing ? "Memproses..." : "Bayar Sekarang"}
-              </button>
+              )})}
             </div>
 
+            <div className="relative">
+                <div className="bg-[#2a0505] border border-[#5c1010] p-6 rounded-lg shadow-xl sticky top-[100px]">
+                    <h3 className="font-bold text-lg mb-4 border-b border-[#5c1010] pb-3 text-gray-200">Ringkasan Belanja</h3>
+                    <div className="space-y-2 mb-4">
+                        <div className="flex justify-between text-sm text-gray-400"><span>Total Barang</span><span>{cartItems.filter(i => i.isChecked).reduce((a, b) => a + b.quantity, 0)} Pcs</span></div>
+                        <div className="flex justify-between text-sm text-gray-300"><span>Total Harga</span><span>{formatRupiah(totalPrice)}</span></div>
+                    </div>
+                    <div className="border-t border-[#5c1010] my-4"></div>
+                    <div className="flex justify-between mb-6 font-bold text-xl items-center"><span>Total Tagihan</span><span className="text-[#FF3B30]">{formatRupiah(totalPrice)}</span></div>
+                    <button disabled={totalPrice === 0} onClick={handleCheckout} className={`w-full py-3.5 rounded-lg font-bold text-white shadow-lg transition-all transform active:scale-95 ${totalPrice > 0 ? "bg-[#FF3B30] hover:bg-[#d32f2f] hover:shadow-red-900/50" : "bg-gray-700 cursor-not-allowed opacity-50"}`}>Checkout ({cartItems.filter(i => i.isChecked).length})</button>
+                </div>
+            </div>
           </div>
-
-        </div>
+        )}
       </main>
     </div>
   );
