@@ -14,7 +14,7 @@ type Product = {
   description: string;
   category: string;
   price: number;
-  quantity: number;
+  quantity: number; // Stok barang
   sold: number;
   isAdvertised: boolean;
   discount: number;
@@ -22,7 +22,7 @@ type Product = {
   isDropItem: boolean;
 };
 
-// --- KOMPONEN MODAL CUSTOM (Card Alert) ---
+// --- KOMPONEN MODAL ALERT (Success/Error) ---
 function CustomModal({
   isOpen,
   type,
@@ -40,51 +40,24 @@ function CustomModal({
 
   return (
     <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 animate-fadeIn">
-      {/* Backdrop Blur */}
-      <div 
-        className="absolute inset-0 bg-black/60 backdrop-blur-sm"
-        onClick={onConfirm}
-      ></div>
-
-      {/* Modal Card */}
-      <div className="bg-[#1E1E1E] text-white w-full max-w-sm rounded-2xl shadow-2xl border border-[#333] p-6 relative z-10 flex flex-col items-center text-center transform transition-all scale-100">
-        
-        {/* Icon */}
+      <div className="absolute inset-0 bg-black/60 backdrop-blur-sm" onClick={onConfirm}></div>
+      <div className="bg-[#1E1E1E] text-white w-full max-w-sm rounded-2xl shadow-2xl border border-[#333] p-6 relative z-10 flex flex-col items-center text-center">
         <div className={`w-16 h-16 rounded-full flex items-center justify-center mb-4 ${
           type === "success" ? "bg-green-900/30 text-green-500" : 
           type === "error" ? "bg-red-900/30 text-red-500" : 
           "bg-blue-900/30 text-blue-500"
         }`}>
-          {type === "success" && (
-            <svg xmlns="http://www.w3.org/2000/svg" className="h-8 w-8" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={3}>
-              <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
-            </svg>
-          )}
-          {type === "error" && (
-            <svg xmlns="http://www.w3.org/2000/svg" className="h-8 w-8" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={3}>
-              <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
-            </svg>
-          )}
-          {type === "info" && (
-            <svg xmlns="http://www.w3.org/2000/svg" className="h-8 w-8" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={3}>
-              <path strokeLinecap="round" strokeLinejoin="round" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
-            </svg>
-          )}
+          {type === "success" && <svg xmlns="http://www.w3.org/2000/svg" className="h-8 w-8" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M5 13l4 4L19 7" /></svg>}
+          {type === "error" && <svg xmlns="http://www.w3.org/2000/svg" className="h-8 w-8" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M6 18L18 6M6 6l12 12" /></svg>}
+          {type === "info" && <svg xmlns="http://www.w3.org/2000/svg" className="h-8 w-8" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>}
         </div>
-
-        {/* Title & Message */}
         <h3 className="text-xl font-bold mb-2 tracking-wide">{title}</h3>
         <p className="text-sm text-gray-400 mb-6">{message}</p>
-
-        {/* Button */}
-        <button
-          onClick={onConfirm}
-          className={`px-8 py-2.5 rounded-lg font-bold text-white shadow-lg transition-transform transform active:scale-95 w-full ${
+        <button onClick={onConfirm} className={`px-8 py-2.5 rounded-lg font-bold text-white shadow-lg w-full ${
             type === "success" ? "bg-green-600 hover:bg-green-700" : 
             type === "error" ? "bg-red-600 hover:bg-red-700" : 
             "bg-blue-600 hover:bg-blue-700"
-          }`}
-        >
+          }`}>
           OK
         </button>
       </div>
@@ -92,7 +65,128 @@ function CustomModal({
   );
 }
 
-// DATA DUMMY BANNER
+// --- KOMPONEN MODAL QUANTITY (RED STYLE + INPUT) ---
+function QuantityModal({
+  isOpen,
+  product,
+  currentQty,
+  onQtyChange, // New prop untuk handle input manual
+  onConfirm,
+  onCancel,
+  loading,
+}: {
+  isOpen: boolean;
+  product: Product | null;
+  currentQty: number;
+  onQtyChange: (val: number) => void;
+  onConfirm: () => void;
+  onCancel: () => void;
+  loading: boolean;
+}) {
+  if (!isOpen || !product) return null;
+
+  return (
+    <div className="fixed inset-0 z-[110] flex items-center justify-center p-4 animate-fadeIn">
+      {/* Backdrop */}
+      <div className="absolute inset-0 bg-black/80 backdrop-blur-sm" onClick={!loading ? onCancel : undefined}></div>
+      
+      {/* Card Merah/Hitam */}
+      <div className="w-full max-w-sm bg-[#18181b] text-white rounded-2xl shadow-2xl border border-red-900/30 p-6 relative z-10 flex flex-col items-center">
+        
+        {/* Icon Cart Merah */}
+        <div className="w-20 h-20 bg-red-900/20 rounded-full flex items-center justify-center mb-4 ring-1 ring-red-500/50">
+           <svg xmlns="http://www.w3.org/2000/svg" className="h-10 w-10 text-red-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 3h2l.4 2M7 13h10l4-8H5.4M7 13L5.4 5M7 13l-2.293 2.293c-.63.63-.184 1.707.707 1.707H17m0 0a2 2 0 100 4 2 2 0 000-4zm-8 2a2 2 0 11-4 0 2 2 0 014 0z" />
+           </svg>
+        </div>
+
+        <h3 className="text-2xl font-bold mb-1 tracking-tight">Tambah ke Keranjang</h3>
+        <p className="text-gray-400 text-sm mb-6">
+          Stok Tersedia: <span className="font-bold text-red-500">{product.quantity} pcs</span>
+        </p>
+
+        {/* INPUT GROUP (+ ANGKA -) */}
+        <div className="flex items-center justify-center gap-4 mb-8 w-full">
+          {/* Tombol Minus */}
+          <button 
+            onClick={() => onQtyChange(currentQty - 1)}
+            disabled={currentQty <= 1 || loading}
+            className={`w-12 h-12 rounded-lg flex items-center justify-center text-2xl font-bold transition-all ${
+               currentQty <= 1 
+               ? "bg-red-900/20 text-red-900 cursor-not-allowed" 
+               : "bg-red-600 hover:bg-red-500 text-white shadow-lg shadow-red-900/50 active:scale-95"
+            }`}
+          >
+            −
+          </button>
+
+          {/* Input Angka Manual */}
+          <input 
+            type="number"
+            min="1"
+            max={product.quantity}
+            value={currentQty}
+            onChange={(e) => {
+              const val = parseInt(e.target.value);
+              // Handle input kosong atau validasi langsung
+              if (!isNaN(val)) {
+                onQtyChange(val);
+              } else {
+                onQtyChange(0); // Sementara 0 agar bisa mengetik, nanti di blur bisa di set 1
+              }
+            }}
+            onBlur={(e) => {
+               // Saat user selesai ngetik, pastikan minimal 1
+               let val = parseInt(e.target.value);
+               if (isNaN(val) || val < 1) onQtyChange(1);
+               else if (val > product.quantity) onQtyChange(product.quantity);
+            }}
+            disabled={loading}
+            className="w-20 h-12 bg-[#27272a] border border-[#3f3f46] rounded-lg text-center text-xl font-bold text-white focus:outline-none focus:border-red-500 focus:ring-1 focus:ring-red-500 transition-all"
+          />
+
+          {/* Tombol Plus */}
+          <button 
+            onClick={() => onQtyChange(currentQty + 1)}
+            disabled={currentQty >= product.quantity || loading}
+            className={`w-12 h-12 rounded-lg flex items-center justify-center text-2xl font-bold transition-all ${
+               currentQty >= product.quantity 
+               ? "bg-red-900/20 text-red-900 cursor-not-allowed" 
+               : "bg-red-600 hover:bg-red-500 text-white shadow-lg shadow-red-900/50 active:scale-95"
+            }`}
+          >
+            +
+          </button>
+        </div>
+
+        {/* Action Buttons */}
+        <div className="flex gap-3 w-full">
+          <button 
+            onClick={onCancel}
+            disabled={loading}
+            className="flex-1 py-3 rounded-lg font-semibold text-sm bg-[#27272a] hover:bg-[#3f3f46] text-gray-300 transition-colors"
+          >
+            Batal
+          </button>
+          <button 
+            onClick={onConfirm}
+            disabled={loading || currentQty < 1}
+            className={`flex-1 py-3 rounded-lg font-bold text-sm text-white shadow-lg transition-all flex justify-center items-center gap-2 ${
+                loading ? "bg-red-800 cursor-wait" : "bg-red-600 hover:bg-red-500 shadow-red-900/40"
+            }`}
+          >
+            {loading ? (
+              <div className="w-4 h-4 border-2 border-t-transparent border-white rounded-full animate-spin"></div>
+            ) : (
+              "Masuk Keranjang"
+            )}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 const BANNERS = [
   { id: 1, image: "/hero.jpg", title: "Discover New Collection", desc: "Dapatkan item eksklusif dengan harga terbaik.", color: "text-orange-400" },
   { id: 2, image: "/hero.jpg", title: "Flash Sale Serba Murah", desc: "Diskon hingga 90% untuk produk pilihan.", color: "text-yellow-400" },
@@ -109,7 +203,12 @@ export default function HomePage() {
   const [currentSlide, setCurrentSlide] = useState(0);
   const [cartLoading, setCartLoading] = useState<string | null>(null);
 
-  // --- STATE MODAL ---
+  // --- STATE QUANTITY MODAL ---
+  const [qtyModalOpen, setQtyModalOpen] = useState(false);
+  const [selectedProduct, setSelectedProduct] = useState<Product | null>(null);
+  const [orderQty, setOrderQty] = useState(1);
+
+  // --- STATE MODAL ALERT ---
   const [modalConfig, setModalConfig] = useState<{
     isOpen: boolean;
     type: "success" | "error" | "info";
@@ -122,28 +221,49 @@ export default function HomePage() {
     message: "",
   });
 
-  // Helper Show Modal
   const showModal = (type: "success" | "error" | "info", title: string, message: string) => {
     setModalConfig({ isOpen: true, type, title, message });
   };
-
-  const closeModal = () => {
-    setModalConfig((prev) => ({ ...prev, isOpen: false }));
-  };
+  const closeModal = () => setModalConfig((prev) => ({ ...prev, isOpen: false }));
 
   const prevSlide = () => setCurrentSlide((prev) => (prev === 0 ? BANNERS.length - 1 : prev - 1));
   const nextSlide = () => setCurrentSlide((prev) => (prev === BANNERS.length - 1 ? 0 : prev + 1));
 
-  // --- FUNGSI ADD TO CART ---
-  const handleAddToCart = async (productId: string) => {
+  // --- LOGIKA BUKA POPUP QUANTITY ---
+  const handleOpenQtyModal = (product: Product) => {
     const token = localStorage.getItem("authToken");
-    
     if (!token) {
-      showModal("error", "Akses Ditolak", "Harap login terlebih dahulu untuk belanja!");
+      showModal("error", "Akses Ditolak", "Harap login terlebih dahulu!");
       return;
     }
+    if (product.quantity <= 0) {
+      showModal("error", "Stok Habis", "Maaf, stok produk ini sudah habis.");
+      return;
+    }
+    // Set produk yg dipilih, reset qty jadi 1, buka modal
+    setSelectedProduct(product);
+    setOrderQty(1);
+    setQtyModalOpen(true);
+  };
 
-    setCartLoading(productId);
+  // --- HANDLE PERUBAHAN QTY (INPUT & TOMBOL) ---
+  const handleQtyChange = (val: number) => {
+    if (!selectedProduct) return;
+    
+    // Validasi Max Stock
+    if (val > selectedProduct.quantity) {
+        setOrderQty(selectedProduct.quantity);
+    } else {
+        setOrderQty(val);
+    }
+  };
+
+  // --- EKSEKUSI ADD TO CART SETELAH PILIH JUMLAH ---
+  const handleConfirmAddToCart = async () => {
+    if (!selectedProduct || orderQty < 1) return;
+    
+    const token = localStorage.getItem("authToken");
+    setCartLoading(selectedProduct._id); 
 
     try {
       const res = await fetch(`${BASE_URL}/api/cart/addCart`, {
@@ -155,15 +275,24 @@ export default function HomePage() {
           "x-api-key": (BACKEND_TOKEN as string) || "",
         },
         body: JSON.stringify({
-          productId: productId,
-          quantity: 1, 
+          productId: selectedProduct._id,
+          quantity: orderQty, 
         }),
       });
 
       const data = await res.json();
 
       if (res.ok) {
-        showModal("success", "Berhasil", "Produk berhasil ditambahkan ke keranjang! 🛒");
+        // UPDATE STOK LOKAL DI LAYAR
+        setProducts(prev => prev.map(p => 
+            p._id === selectedProduct._id 
+            ? { ...p, quantity: Math.max(0, p.quantity - orderQty) } 
+            : p
+        ));
+
+        window.dispatchEvent(new Event("cart-updated"));
+        setQtyModalOpen(false); // Tutup modal quantity
+        showModal("success", "Berhasil", `${orderQty} barang berhasil masuk keranjang! 🛒`);
       } else {
         showModal("error", "Gagal", data.message || "Gagal menambahkan ke keranjang.");
       }
@@ -175,21 +304,17 @@ export default function HomePage() {
     }
   };
 
-  // --- FUNGSI BELI SEKARANG ---
-  const handleBuyNow = async (productId: string) => {
+  // --- FUNGSI BELI SEKARANG (LANGSUNG 1 ITEM) ---
+  const handleBuyNow = async (product: Product) => {
     const token = localStorage.getItem("authToken");
-    
     if (!token) {
-      showModal("error", "Akses Ditolak", "Harap login terlebih dahulu untuk belanja!");
-      return;
+        showModal("error", "Akses Ditolak", "Harap login dulu!");
+        return;
     }
+    if (product.quantity <= 0) return;
 
-    // Opsi 1: Langsung redirect ke checkout (jika checkout mengambil semua item di cart)
-    // Tapi sebaiknya kita tambahkan dulu item ini ke cart agar masuk dalam checkout
-    setCartLoading(productId); // Gunakan loading yang sama
-
+    setCartLoading(product._id);
     try {
-      // 1. Tambahkan ke Cart dulu
       const res = await fetch(`${BASE_URL}/api/cart/addCart`, {
         method: "POST",
         headers: {
@@ -198,27 +323,24 @@ export default function HomePage() {
           "x-auth-token": token || "",
           "x-api-key": (BACKEND_TOKEN as string) || "",
         },
-        body: JSON.stringify({
-          productId: productId,
-          quantity: 1, 
-        }),
+        body: JSON.stringify({ productId: product._id, quantity: 1 }),
       });
 
       if (res.ok) {
-        // 2. Jika sukses, langsung redirect ke checkout
+        window.dispatchEvent(new Event("cart-updated"));
         router.push("/checkout");
       } else {
         const data = await res.json();
-        showModal("error", "Gagal", data.message || "Gagal memproses pembelian.");
+        showModal("error", "Gagal", data.message);
       }
     } catch (err) {
-      console.error("Error buy now:", err);
-      showModal("error", "Error Koneksi", "Gagal menghubungi server.");
+      showModal("error", "Error", "Gagal menghubungi server.");
     } finally {
       setCartLoading(null);
     }
   };
 
+  // --- FETCHING DATA ---
   useEffect(() => {
     const checkAuthAndFetch = async () => {
       if (typeof window === "undefined") return;
@@ -230,7 +352,6 @@ export default function HomePage() {
         setLoading(false);
         return;
       }
-
       setIsLoggedIn(true);
 
       try {
@@ -243,7 +364,6 @@ export default function HomePage() {
             "x-api-key": (BACKEND_TOKEN as string) || "", 
           },
         });
-
         const data = await res.json();
 
         if (!res.ok) {
@@ -256,21 +376,16 @@ export default function HomePage() {
           }
           throw new Error(data.message || "Gagal mengambil produk");
         }
-
         setProducts(Array.isArray(data) ? data : data.data || []);
         setLoading(false); 
-
       } catch (err: unknown) {
         console.error("ERROR FETCH:", err);
         let message = "Terjadi kesalahan saat mengambil produk.";
-        if (err instanceof Error) {
-          message = err.message;
-        }
+        if (err instanceof Error) message = err.message;
         setError(message);
         setLoading(false);
       }
     };
-
     checkAuthAndFetch();
   }, []);
 
@@ -280,11 +395,7 @@ export default function HomePage() {
   }, []);
 
   const formatPrice = (price: number) =>
-    new Intl.NumberFormat("id-ID", {
-      style: "currency",
-      currency: "IDR",
-      maximumFractionDigits: 0,
-    }).format(price);
+    new Intl.NumberFormat("id-ID", { style: "currency", currency: "IDR", maximumFractionDigits: 0 }).format(price);
 
   if (loading) {
      return (
@@ -304,10 +415,18 @@ export default function HomePage() {
       
       <Navbar isLoggedIn={isLoggedIn} darkMode={darkMode} />
 
-      {/* --- RENDER MODAL DISINI --- */}
-      <CustomModal 
-        {...modalConfig} 
-        onConfirm={closeModal} 
+      {/* --- RENDER MODAL ALERT --- */}
+      <CustomModal {...modalConfig} onConfirm={closeModal} />
+
+      {/* --- RENDER MODAL QUANTITY (NEW) --- */}
+      <QuantityModal 
+        isOpen={qtyModalOpen}
+        product={selectedProduct}
+        currentQty={orderQty}
+        onQtyChange={handleQtyChange} // Pass function handler
+        onConfirm={handleConfirmAddToCart}
+        onCancel={() => setQtyModalOpen(false)}
+        loading={cartLoading === (selectedProduct?._id)}
       />
 
       <button
@@ -383,29 +502,57 @@ export default function HomePage() {
                                 ) : null}
                                 {!imageUrl && <div className="absolute inset-0 flex items-center justify-center text-gray-500 text-xs">No Image</div>}
                                 {p.discount > 0 && <div className="absolute top-2 right-2 bg-red-600 text-white text-[10px] font-bold px-2 py-1 rounded">-{p.discount}%</div>}
+                                
+                                {/* Overlay jika stok habis */}
+                                {p.quantity <= 0 && (
+                                    <div className="absolute inset-0 bg-black/70 flex items-center justify-center text-white font-bold tracking-wider z-10">STOK HABIS</div>
+                                )}
                             </div>
                             <div className="flex-1 flex flex-col justify-between p-3">
                                 <div>
                                     <p className={`font-semibold text-sm truncate ${darkMode ? "text-gray-100" : "text-gray-800"}`} title={p.name}>{p.name}</p>
                                     <p className="text-[10px] text-gray-500 mt-1 uppercase tracking-wider">{p.category}</p>
-                                    <div className="mt-2"><span className="font-bold text-[#e53935] text-sm">{formatPrice(p.price)}</span></div>
+                                    
+                                    <div className="mt-2 flex items-center justify-between">
+                                      <span className="font-bold text-[#e53935] text-sm">{formatPrice(p.price)}</span>
+                                      {/* --- MENAMPILKAN STOK --- */}
+                                      <span className={`text-[10px] font-medium px-2 py-0.5 rounded ${
+                                        p.quantity > 0 ? "bg-green-100 text-green-700" : "bg-gray-200 text-gray-500"
+                                      }`}>
+                                        Stok: {p.quantity}
+                                      </span>
+                                    </div>
                                 </div>
                                 <div className="mt-3 flex gap-2">
-                                    <button onClick={(e) => { e.stopPropagation(); handleAddToCart(p._id); }} disabled={cartLoading === p._id} className={`p-2 rounded border transition-colors flex items-center justify-center ${darkMode ? "border-gray-500 hover:bg-gray-700 text-white" : "border-gray-300 hover:bg-gray-100 text-black"}`} title="Tambah ke Keranjang">
-                                        {cartLoading === p._id ? (
-                                            <div className="w-4 h-4 border-2 border-t-transparent border-current rounded-full animate-spin"></div>
-                                        ) : (
-                                            <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 3h2l.4 2M7 13h10l4-8H5.4M7 13L5.4 5M7 13l-2.293 2.293c-.63.63-.184 1.707.707 1.707H17m0 0a2 2 0 100 4 2 2 0 000-4zm-8 2a2 2 0 11-4 0 2 2 0 014 0z" /></svg>
-                                        )}
+                                    <button 
+                                            onClick={(e) => { 
+                                              e.stopPropagation(); 
+                                              // Membuka modal quantity bukan langsung add
+                                              handleOpenQtyModal(p); 
+                                            }} 
+                                            disabled={p.quantity <= 0} 
+                                            className={`p-2 rounded border transition-colors flex items-center justify-center ${
+                                              darkMode 
+                                                ? "border-gray-500 hover:bg-gray-700 text-white" 
+                                                : "border-gray-300 hover:bg-gray-100 text-black"
+                                            } ${p.quantity <= 0 ? "opacity-50 cursor-not-allowed" : ""}`} 
+                                            title={p.quantity <= 0 ? "Stok Habis" : "Tambah ke Keranjang"}
+                                    >
+                                      <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 3h2l.4 2M7 13h10l4-8H5.4M7 13L5.4 5M7 13l-2.293 2.293c-.63.63-.184 1.707.707 1.707H17m0 0a2 2 0 100 4 2 2 0 000-4zm-8 2a2 2 0 11-4 0 2 2 0 014 0z" /></svg>
                                     </button>
                                     <button 
                                       onClick={(e) => { 
                                         e.stopPropagation(); 
-                                        handleBuyNow(p._id); 
+                                        handleBuyNow(p); 
                                       }}
-                                      className={`flex-1 text-xs font-bold px-2 py-2 rounded transition-colors ${darkMode ? "bg-white hover:bg-gray-200 text-black" : "bg-black hover:bg-gray-800 text-white"}`}
+                                      disabled={p.quantity <= 0}
+                                      className={`flex-1 text-xs font-bold px-2 py-2 rounded transition-colors ${
+                                        darkMode 
+                                          ? "bg-white hover:bg-gray-200 text-black" 
+                                          : "bg-black hover:bg-gray-800 text-white"
+                                      } ${p.quantity <= 0 ? "opacity-50 cursor-not-allowed" : ""}`}
                                     >
-                                      Beli Sekarang
+                                      {p.quantity <= 0 ? "Habis" : "Beli Sekarang"}
                                     </button>
                                 </div>
                             </div>
